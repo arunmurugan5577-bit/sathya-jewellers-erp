@@ -1,0 +1,38 @@
+/* ---------------------------------------------------------------------------
+ * Printing invoices and purchase bills.
+ *
+ * Only the document is printed: the sidebar, header, toasts and anything marked
+ * .no-print disappear, and the page background turns white whatever the theme.
+ * ------------------------------------------------------------------------- */
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
+  app-sidebar,
+  app-header,
+  app-toast-container,
+  app-confirm-dialog,
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body,
+  .shell,
+  .shell__main,
+  .shell__content {
+    background: #fff !important;
+    color: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    box-shadow: none !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

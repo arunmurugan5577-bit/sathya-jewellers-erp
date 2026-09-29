@@ -1,0 +1,78 @@
+/**
+ * Permission codes, mirroring the backend {@code PermissionCatalog}.
+ *
+ * Typed constants rather than loose strings: a renamed permission becomes a
+ * compile error in the templates that reference it, instead of a button that
+ * quietly stops appearing.
+ */
+export const Permissions = {
+  ITEM_TYPE_VIEW: 'ITEM_TYPE_VIEW',
+  ITEM_TYPE_CREATE: 'ITEM_TYPE_CREATE',
+  ITEM_TYPE_EDIT: 'ITEM_TYPE_EDIT',
+  ITEM_TYPE_DELETE: 'ITEM_TYPE_DELETE',
+
+  CATEGORY_VIEW: 'CATEGORY_VIEW',
+  CATEGORY_CREATE: 'CATEGORY_CREATE',
+  CATEGORY_EDIT: 'CATEGORY_EDIT',
+  CATEGORY_DELETE: 'CATEGORY_DELETE',
+
+  SUB_CATEGORY_VIEW: 'SUB_CATEGORY_VIEW',
+  SUB_CATEGORY_CREATE: 'SUB_CATEGORY_CREATE',
+  SUB_CATEGORY_EDIT: 'SUB_CATEGORY_EDIT',
+  SUB_CATEGORY_DELETE: 'SUB_CATEGORY_DELETE',
+
+  HSN_VIEW: 'HSN_VIEW',
+  HSN_CREATE: 'HSN_CREATE',
+  HSN_EDIT: 'HSN_EDIT',
+  HSN_DELETE: 'HSN_DELETE',
+
+  PURITY_VIEW: 'PURITY_VIEW',
+  PURITY_CREATE: 'PURITY_CREATE',
+  PURITY_EDIT: 'PURITY_EDIT',
+  PURITY_DELETE: 'PURITY_DELETE',
+
+  USER_VIEW: 'USER_VIEW',
+  USER_CREATE: 'USER_CREATE',
+  USER_EDIT: 'USER_EDIT',
+  USER_DELETE: 'USER_DELETE',
+
+  INVENTORY_VIEW: 'INVENTORY_VIEW',
+  INVENTORY_CREATE: 'INVENTORY_CREATE',
+  INVENTORY_EDIT: 'INVENTORY_EDIT',
+  INVENTORY_DELETE: 'INVENTORY_DELETE',
+
+  SHOP_SETTINGS_VIEW: 'SHOP_SETTINGS_VIEW',
+  SHOP_SETTINGS_EDIT: 'SHOP_SETTINGS_EDIT',
+
+  CUSTOMER_VIEW: 'CUSTOMER_VIEW',
+  CUSTOMER_CREATE: 'CUSTOMER_CREATE',
+  CUSTOMER_EDIT: 'CUSTOMER_EDIT',
+  CUSTOMER_DELETE: 'CUSTOMER_DELETE',
+
+  OLD_METAL_VIEW: 'OLD_METAL_VIEW',
+  OLD_METAL_CREATE: 'OLD_METAL_CREATE',
+  OLD_METAL_EDIT: 'OLD_METAL_EDIT',
+  /** Cancel a purchase bill. */
+  OLD_METAL_DELETE: 'OLD_METAL_DELETE',
+
+  SALES_VIEW: 'SALES_VIEW',
+  SALES_CREATE: 'SALES_CREATE',
+  /** Record further payments and edit remarks. */
+  SALES_EDIT: 'SALES_EDIT',
+  /** Cancel an invoice. */
+  SALES_DELETE: 'SALES_DELETE',
+
+  /** Open label printing and preview labels. */
+  LABEL_VIEW: 'LABEL_VIEW',
+  /** Send labels to the printer. */
+  LABEL_CREATE: 'LABEL_CREATE',
+  /** Change the short name and printer calibration. */
+  LABEL_EDIT: 'LABEL_EDIT',
+
+  REPORT_STOCK_VIEW: 'REPORT_STOCK_VIEW',
+  REPORT_STOCK_EXPORT: 'REPORT_STOCK_EXPORT',
+  REPORT_SALES_VIEW: 'REPORT_SALES_VIEW',
+  REPORT_SALES_EXPORT: 'REPORT_SALES_EXPORT',
+} as const;
+
+export type PermissionCode = (typeof Permissions)[keyof typeof Permissions];

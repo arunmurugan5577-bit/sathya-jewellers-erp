@@ -1,0 +1,22 @@
+# Development profile - relaxed logging and Swagger UI enabled.
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+logging:
+  level:
+    com.jewellery.erp: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG

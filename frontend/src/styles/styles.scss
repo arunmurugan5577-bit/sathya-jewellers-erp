@@ -1,0 +1,10 @@
+/* ---------------------------------------------------------------------------
+ * Global stylesheet.
+ *
+ * Order matters: tokens define the variables, base resets the elements, and
+ * components build the shared vocabulary on top of both.
+ * ------------------------------------------------------------------------- */
+@use 'tokens';
+@use 'base';
+@use 'components';
+@use 'print';

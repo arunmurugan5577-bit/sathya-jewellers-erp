@@ -1,0 +1,24 @@
+# Production profile.
+#  - Swagger UI is disabled (see README for how to expose it behind auth).
+#  - Every secret must arrive through the environment; startup fails otherwise.
+#  - CORS must be an explicit origin list; "*" is rejected by CorsProperties.
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+server:
+  forward-headers-strategy: framework
+
+logging:
+  level:
+    root: WARN
+    com.jewellery.erp: INFO
+    org.springframework.security: WARN

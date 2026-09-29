@@ -1,0 +1,7 @@
+# Where the hosted application lives, including /api
+server.url=https://your-erp-domain.com/api
+
+# A user account kept for this agent alone. It needs the
+# "Print barcode labels" permission and nothing else.
+agent.username=print-agent
+agent.password=

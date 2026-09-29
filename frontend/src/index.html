@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Jewellery ERP</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Jewellery Shop ERP" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="assets/brand/logo-icon.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      /*
+       * Applies the saved theme before the first paint.
+       *
+       * Without this, a user who chose dark would get a white flash on every
+       * page load while Angular boots and ThemeService runs. Deliberately
+       * inline and synchronous - a deferred script would paint first, which is
+       * the whole problem.
+       *
+       * The storage key is duplicated from ThemeService because this has to run
+       * before any bundle loads. Keep the two in step.
+       */
+      (function () {
+        try {
+          var stored = localStorage.getItem('jewellery-erp.theme');
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored);
+          }
+        } catch (e) {
+          /* Storage blocked - fall through to the OS preference. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>

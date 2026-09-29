@@ -1,0 +1,38 @@
+# --- secrets -------------------------------------------------------------
+# Real credentials live here and never in the repository. See .env.example
+# and secrets.local.ps1.example for the shape of each.
+.env
+.env.local
+secrets.local.ps1
+tools/print-agent/agent.properties
+
+# --- build output --------------------------------------------------------
+target/
+build/
+dist/
+*.jar
+*.war
+*.class
+
+# --- dependencies --------------------------------------------------------
+node_modules/
+.angular/
+
+# A local copy of Maven, kept for convenience on the shop PC. Anyone building
+# this elsewhere should use their own, so it is not worth 11 MB in the history.
+tools/apache-maven-*/
+
+# --- runtime scratch -----------------------------------------------------
+# Workaround directory for the JDK AF_UNIX temp path on Windows; see
+# start-backend.ps1.
+.tmp/
+*.log
+logs/
+
+# --- editors and operating systems ---------------------------------------
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini

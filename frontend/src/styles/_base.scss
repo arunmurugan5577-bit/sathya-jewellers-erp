@@ -1,0 +1,105 @@
+/* ---------------------------------------------------------------------------
+ * Reset and element defaults.
+ * ------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+
+  /* Eases the page ground when the theme switches. Deliberately limited to the
+   * body: crossfading every card, row and border at once looks laggy, whereas
+   * the components snapping against a settling background reads as crisp. */
+  transition:
+    background-color var(--transition-theme),
+    color var(--transition-theme);
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+/* Display headings carry the identity; body and controls stay in the sans, so
+ * dense data remains scannable. */
+h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+h2 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+h3 {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* A visible focus ring on every interactive element. Removing it would make the
+ * application unusable by keyboard, which for a data entry system that staff use
+ * all day is a real cost and not a theoretical one. */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Only for content that must exist for screen readers. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
