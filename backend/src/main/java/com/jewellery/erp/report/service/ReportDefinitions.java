@@ -10,6 +10,7 @@ import static com.jewellery.erp.report.engine.ReportColumn.weight;
 
 import com.jewellery.erp.common.config.BusinessClock;
 import com.jewellery.erp.report.engine.ReportColumn;
+import com.jewellery.erp.wholesale.dto.WholesaleReportFilter;
 import com.jewellery.erp.report.engine.ReportDefinition;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -221,5 +222,134 @@ public class ReportDefinitions {
                         new ReportDefinition.Sheet("Payments", PAYMENT_COLUMNS,
                                 PAYMENT_SQL + where + " ORDER BY s.invoice_date, s.invoice_number, sp.id",
                                 params)));
+    }
+
+    // --- Wholesale -----------------------------------------------------------
+    //
+    // Wholesale is accounted in pure gold as well as rupees, so the report
+    // carries both: the weight columns are what the shop reconciles against a
+    // party account, the rupee columns what it reconciles against the books.
+
+    private static final List<ReportColumn> WHOLESALE_COLUMNS = List.of(
+            text("estimateNumber", "Estimate No", 18),
+            date("estimateDate", "Date"),
+            text("status", "Status", 11),
+            text("customerCode", "Party Code", 12),
+            text("customerName", "Party", 24),
+            text("customerMobile", "Mobile", 13),
+            money("pureRatePerGram", "Pure Rate / g", false),
+            integer("itemCount", "Pieces", true),
+            weight("totalPureGrams", "Pure Wt (g)", true),
+            money("totalMiscAmount", "Making + Stone", true),
+            money("totalAmount", "Estimate Total", true),
+            weight("openingPureGrams", "Opening Pure (g)", false),
+            money("openingValue", "Opening Value", false),
+            weight("closingPureGrams", "Closing Pure (g)", false),
+            money("closingMiscAmount", "Closing Misc", false),
+            money("closingValue", "Closing Value", false),
+            text("cancelReason", "Cancel Reason", 24));
+
+    private static final String WHOLESALE_SQL = """
+            SELECT w.estimate_number     AS "estimateNumber",
+                   w.estimate_date       AS "estimateDate",
+                   w.status              AS "status",
+                   w.customer_code       AS "customerCode",
+                   w.customer_name       AS "customerName",
+                   w.customer_mobile     AS "customerMobile",
+                   w.pure_rate_per_gram  AS "pureRatePerGram",
+                   (SELECT count(*) FROM wholesale_estimate_items i WHERE i.estimate_id = w.id) AS "itemCount",
+                   w.total_pure_grams    AS "totalPureGrams",
+                   w.total_misc_amount   AS "totalMiscAmount",
+                   w.total_amount        AS "totalAmount",
+                   w.opening_pure_grams  AS "openingPureGrams",
+                   w.opening_value       AS "openingValue",
+                   w.closing_pure_grams  AS "closingPureGrams",
+                   w.closing_misc_amount AS "closingMiscAmount",
+                   w.closing_value       AS "closingValue",
+                   w.cancel_reason       AS "cancelReason"
+              FROM wholesale_estimates w""";
+
+    private static final List<ReportColumn> WHOLESALE_ITEM_COLUMNS = List.of(
+            text("estimateNumber", "Estimate No", 18),
+            date("estimateDate", "Date"),
+            text("customerName", "Party", 24),
+            integer("lineNumber", "Line", false),
+            text("serialNumber", "Serial", 10),
+            text("jewelName", "Jewel Name", 26),
+            weight("jewelWeightGrams", "Jewel Wt (g)", true),
+            money("purePercentage", "Touch %", false),
+            weight("pureWeightGrams", "Pure Wt (g)", true),
+            money("ratePerGram", "Rate / g", false),
+            money("makingCharge", "Making", true),
+            money("stoneAmount", "Stone", true),
+            money("itemAmount", "Item Amount", true),
+            text("lineStatus", "Line Status", 11));
+
+    private static final String WHOLESALE_ITEM_SQL = """
+            SELECT w.estimate_number    AS "estimateNumber",
+                   w.estimate_date      AS "estimateDate",
+                   w.customer_name      AS "customerName",
+                   i.line_number        AS "lineNumber",
+                   i.serial_number      AS "serialNumber",
+                   i.jewel_name         AS "jewelName",
+                   i.jewel_weight_grams AS "jewelWeightGrams",
+                   i.pure_percentage    AS "purePercentage",
+                   i.pure_weight_grams  AS "pureWeightGrams",
+                   i.rate_per_gram      AS "ratePerGram",
+                   i.making_charge      AS "makingCharge",
+                   i.stone_amount       AS "stoneAmount",
+                   i.item_amount        AS "itemAmount",
+                   i.line_status        AS "lineStatus"
+              FROM wholesale_estimate_items i
+              JOIN wholesale_estimates w ON w.id = i.estimate_id""";
+
+    private static final List<ReportColumn> WHOLESALE_BALANCE_COLUMNS = List.of(
+            text("customerCode", "Party Code", 12),
+            text("customerName", "Party", 28),
+            text("customerMobile", "Mobile", 13),
+            weight("pureGrams", "Pure Gold Owed (g)", true),
+            money("miscAmount", "Rupee Balance", true));
+
+    /** The account as it stands today, not as at the end of the window. */
+    private static final String WHOLESALE_BALANCE_SQL = """
+            SELECT c.customer_code AS "customerCode",
+                   c.full_name     AS "customerName",
+                   c.mobile_number AS "customerMobile",
+                   b.pure_grams    AS "pureGrams",
+                   b.misc_amount   AS "miscAmount"
+              FROM wholesale_balances b
+              JOIN customers c ON c.id = b.customer_id
+             WHERE b.pure_grams <> 0 OR b.misc_amount <> 0
+             ORDER BY c.full_name""";
+
+    public ReportDefinition wholesale(WholesaleReportFilter filter, Map<String, String> labels) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("from", filter.startDate());
+        params.put("to", filter.endDate());
+
+        StringBuilder where = new StringBuilder(" WHERE w.estimate_date BETWEEN :from AND :to");
+        List<String> descriptions = new ArrayList<>();
+        if (filter.status() != null) {
+            where.append(" AND w.status = :status");
+            params.put("status", filter.status().name());
+            descriptions.add("Status: " + filter.status().name());
+        } else {
+            descriptions.add("Including cancelled estimates");
+        }
+        if (filter.customerId() != null) {
+            where.append(" AND w.customer_id = :customerId");
+            params.put("customerId", filter.customerId());
+            descriptions.add("Party: " + labels.get("customer"));
+        }
+
+        return new ReportDefinition("Wholesale Report", "wholesale-report",
+                filter.startDate(), filter.endDate(), descriptions, List.of(
+                        new ReportDefinition.Sheet("Estimates", WHOLESALE_COLUMNS,
+                                WHOLESALE_SQL + where + " ORDER BY w.estimate_date, w.estimate_number", params),
+                        new ReportDefinition.Sheet("Items", WHOLESALE_ITEM_COLUMNS,
+                                WHOLESALE_ITEM_SQL + where
+                                        + " ORDER BY w.estimate_date, w.estimate_number, i.line_number", params),
+                        new ReportDefinition.Sheet("Party Balances", WHOLESALE_BALANCE_COLUMNS,
+                                WHOLESALE_BALANCE_SQL, Map.of())));
     }
 }

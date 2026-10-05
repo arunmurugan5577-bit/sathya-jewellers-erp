@@ -144,7 +144,7 @@ export class SaleApiService {
   }
 }
 
-export type ReportKind = 'stock' | 'sales';
+export type ReportKind = 'stock' | 'sales' | 'wholesale';
 
 @Injectable({ providedIn: 'root' })
 export class ReportApiService {

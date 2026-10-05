@@ -263,7 +263,8 @@ public class OldMetalService {
         item.setNetWeightGrams(line.netWeightGrams());
         item.setGrossWeightGrams(line.grossWeightGrams());
         item.setRatePerGram(line.ratePerGram());
-        item.setAmount(calculator.lineAmount(line.netWeightGrams(), line.ratePerGram()));
+        item.setAmount(calculator.lineAmount(
+                line.grossWeightGrams(), line.netWeightGrams(), line.ratePerGram()));
         return item;
     }
 

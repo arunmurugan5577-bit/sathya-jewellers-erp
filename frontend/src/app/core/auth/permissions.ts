@@ -69,6 +69,16 @@ export const Permissions = {
   /** Change the short name and printer calibration. */
   LABEL_EDIT: 'LABEL_EDIT',
 
+  /** Open wholesale estimates and party balances. */
+  WHOLESALE_VIEW: 'WHOLESALE_VIEW',
+  /** Raise a wholesale estimate. */
+  WHOLESALE_CREATE: 'WHOLESALE_CREATE',
+  /** Cancel a wholesale estimate. */
+  WHOLESALE_DELETE: 'WHOLESALE_DELETE',
+
+  REPORT_WHOLESALE_VIEW: 'REPORT_WHOLESALE_VIEW',
+  REPORT_WHOLESALE_EXPORT: 'REPORT_WHOLESALE_EXPORT',
+
   REPORT_STOCK_VIEW: 'REPORT_STOCK_VIEW',
   REPORT_STOCK_EXPORT: 'REPORT_STOCK_EXPORT',
   REPORT_SALES_VIEW: 'REPORT_SALES_VIEW',

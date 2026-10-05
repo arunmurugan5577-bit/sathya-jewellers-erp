@@ -39,6 +39,9 @@ function isoDate(date: Date): string {
         @if (canView('stock')) {
           <button type="button" role="tab" class="tab" [class.tab--active]="kind() === 'stock'" (click)="switchTo('stock')">Stock report</button>
         }
+        @if (canView('wholesale')) {
+          <button type="button" role="tab" class="tab" [class.tab--active]="kind() === 'wholesale'" (click)="switchTo('wholesale')">Wholesale report</button>
+        }
       </div>
 
       <section class="card">
@@ -51,6 +54,17 @@ function isoDate(date: Date): string {
             <label class="toolbar__label" for="end">End date *</label>
             <input id="end" class="input" type="date" [value]="endDate()" (change)="endDate.set($any($event.target).value)" />
           </div>
+
+          @if (kind() === 'wholesale') {
+            <div class="toolbar__field">
+              <label class="toolbar__label" for="wsStatus">Estimates</label>
+              <select id="wsStatus" class="select" (change)="wholesaleStatus.set($any($event.target).value)">
+                <option value="COMPLETED">Completed only</option>
+                <option value="CANCELLED">Cancelled only</option>
+                <option value="ALL">All</option>
+              </select>
+            </div>
+          }
 
           @if (kind() === 'sales') {
             <div class="toolbar__field">
@@ -179,10 +193,11 @@ export class ReportsComponent {
   private readonly notifications = inject(NotificationService);
   private readonly inr = new InrPipe();
 
-  protected readonly kind = signal<ReportKind>(this.auth.has(Permissions.REPORT_SALES_VIEW) ? 'sales' : 'stock');
+  protected readonly kind = signal<ReportKind>(this.firstVisibleKind());
   protected readonly startDate = signal(isoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   protected readonly endDate = signal(isoDate(new Date()));
   protected readonly salesStatus = signal('COMPLETED');
+  protected readonly wholesaleStatus = signal('COMPLETED');
   protected readonly paymentStatus = signal('');
   protected readonly itemTypeId = signal('');
   protected readonly categoryId = signal('');
@@ -195,8 +210,15 @@ export class ReportsComponent {
   protected readonly downloading = signal(false);
   protected readonly error = signal<string | null>(null);
 
+  /** Which authority each report needs, so adding one is a single entry. */
+  private static readonly RIGHTS: Record<ReportKind, { view: string; export: string }> = {
+    sales: { view: Permissions.REPORT_SALES_VIEW, export: Permissions.REPORT_SALES_EXPORT },
+    stock: { view: Permissions.REPORT_STOCK_VIEW, export: Permissions.REPORT_STOCK_EXPORT },
+    wholesale: { view: Permissions.REPORT_WHOLESALE_VIEW, export: Permissions.REPORT_WHOLESALE_EXPORT },
+  };
+
   protected readonly canExport = computed(() =>
-    this.auth.has(this.kind() === 'sales' ? Permissions.REPORT_SALES_EXPORT : Permissions.REPORT_STOCK_EXPORT),
+    this.auth.has(ReportsComponent.RIGHTS[this.kind()].export),
   );
 
   constructor() {
@@ -205,7 +227,13 @@ export class ReportsComponent {
   }
 
   protected canView(kind: ReportKind): boolean {
-    return this.auth.has(kind === 'sales' ? Permissions.REPORT_SALES_VIEW : Permissions.REPORT_STOCK_VIEW);
+    return this.auth.has(ReportsComponent.RIGHTS[kind].view);
+  }
+
+  /** Opens on the first report this user may actually see. */
+  private firstVisibleKind(): ReportKind {
+    const order: ReportKind[] = ['sales', 'stock', 'wholesale'];
+    return order.find((kind) => this.auth.has(ReportsComponent.RIGHTS[kind].view)) ?? 'sales';
   }
 
   protected switchTo(kind: ReportKind): void {
@@ -304,8 +332,13 @@ export class ReportsComponent {
 
   private params(): Record<string, string> {
     const base = { startDate: this.startDate(), endDate: this.endDate() };
-    return this.kind() === 'sales'
-      ? { ...base, status: this.salesStatus(), paymentStatus: this.paymentStatus() }
-      : { ...base, itemTypeId: this.itemTypeId(), categoryId: this.categoryId(), status: this.stockStatus() };
+    switch (this.kind()) {
+      case 'sales':
+        return { ...base, status: this.salesStatus(), paymentStatus: this.paymentStatus() };
+      case 'wholesale':
+        return { ...base, status: this.wholesaleStatus() };
+      default:
+        return { ...base, itemTypeId: this.itemTypeId(), categoryId: this.categoryId(), status: this.stockStatus() };
+    }
   }
 }

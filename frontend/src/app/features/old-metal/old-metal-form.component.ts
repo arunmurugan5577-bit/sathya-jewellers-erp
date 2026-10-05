@@ -37,7 +37,7 @@ const DEFAULT_HSN: Record<string, string> = { GOLD: '7108', SILV: '7106' };
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="stack">
-      <app-page-header title="Old gold / silver purchase" subtitle="Amount = net weight x rate, billed in whole rupees.">
+      <app-page-header title="Old gold / silver purchase" subtitle="Amount = gross weight x rate, billed in whole rupees. Leave gross blank when there is nothing to deduct.">
         <a class="btn btn--ghost" routerLink="/old-metal">All purchase bills</a>
       </app-page-header>
 
@@ -86,11 +86,11 @@ const DEFAULT_HSN: Record<string, string> = { GOLD: '7108', SILV: '7106' };
               <input class="input" maxlength="8" inputmode="numeric" [value]="line.hsnCode" (input)="patch(i, { hsnCode: $any($event.target).value })" />
             </div>
             <div class="field">
-              <label class="field__label field__label--required">Net wt (g)</label>
+              <label class="field__label field__label--required" title="After deducting stones and solder. Recorded, not paid on.">Net wt (g)</label>
               <input class="input numeric" type="number" min="0" step="0.001" [value]="line.net" (input)="patch(i, { net: $any($event.target).value })" />
             </div>
             <div class="field">
-              <label class="field__label">Gross wt (g)</label>
+              <label class="field__label" title="The weight on the scale. This is what the customer is paid for. Leave blank when there is nothing to deduct.">Gross wt (g)</label>
               <input class="input numeric" type="number" min="0" step="0.001" [value]="line.gross" (input)="patch(i, { gross: $any($event.target).value })" />
             </div>
             <div class="field">
@@ -164,9 +164,13 @@ export class OldMetalFormComponent {
   }
 
   protected estimate(line: Line): number {
-    const net = Number(line.net);
+    // The shop buys as weighed, so the money follows the scale. A piece with
+    // nothing to deduct has no gross weight entered, and its net weight is the
+    // whole of it. This mirrors OldMetalCalculator; the saved bill is the
+    // server's figure either way.
+    const payable = Number(line.gross) > 0 ? Number(line.gross) : Number(line.net);
     const rate = Number(line.rate);
-    return net > 0 && rate > 0 ? Math.round(net * rate) : 0;
+    return payable > 0 && rate > 0 ? Math.round(payable * rate) : 0;
   }
 
   protected addLine(): void {

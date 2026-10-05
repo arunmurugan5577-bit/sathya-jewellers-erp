@@ -33,6 +33,8 @@ public final class PermissionCatalog {
     public static final String MODULE_OLD_METAL = "OLD_METAL";
     public static final String MODULE_SALES = "SALES";
     public static final String MODULE_LABEL = "LABEL";
+    public static final String MODULE_WHOLESALE = "WHOLESALE";
+    public static final String MODULE_REPORT_WHOLESALE = "REPORT_WHOLESALE";
     public static final String MODULE_REPORT_STOCK = "REPORT_STOCK";
     public static final String MODULE_REPORT_SALES = "REPORT_SALES";
 
@@ -110,6 +112,17 @@ public final class PermissionCatalog {
     /** Change the short name and the printer calibration. */
     public static final String LABEL_EDIT = "LABEL_EDIT";
 
+    // --- Wholesale ---------------------------------------------------------
+    /** Open wholesale estimates and party balances. */
+    public static final String WHOLESALE_VIEW = "WHOLESALE_VIEW";
+    /** Raise a wholesale estimate. */
+    public static final String WHOLESALE_CREATE = "WHOLESALE_CREATE";
+    /** Cancel a wholesale estimate. */
+    public static final String WHOLESALE_DELETE = "WHOLESALE_DELETE";
+
+    public static final String REPORT_WHOLESALE_VIEW = "REPORT_WHOLESALE_VIEW";
+    public static final String REPORT_WHOLESALE_EXPORT = "REPORT_WHOLESALE_EXPORT";
+
     public static final String REPORT_STOCK_VIEW = "REPORT_STOCK_VIEW";
     public static final String REPORT_STOCK_EXPORT = "REPORT_STOCK_EXPORT";
     public static final String REPORT_SALES_VIEW = "REPORT_SALES_VIEW";
@@ -123,8 +136,10 @@ public final class PermissionCatalog {
             new ModuleDescriptor(MODULE_SALES, "Sales"),
             new ModuleDescriptor(MODULE_OLD_METAL, "Old Gold / Silver"),
             new ModuleDescriptor(MODULE_CUSTOMER, "Customers"),
+            new ModuleDescriptor(MODULE_WHOLESALE, "Wholesale"),
             new ModuleDescriptor(MODULE_LABEL, "Label Printing"),
             new ModuleDescriptor(MODULE_REPORT_SALES, "Sales Report"),
+            new ModuleDescriptor(MODULE_REPORT_WHOLESALE, "Wholesale Report"),
             new ModuleDescriptor(MODULE_REPORT_STOCK, "Stock Report"),
             new ModuleDescriptor(MODULE_ITEM_TYPE, "Item Types"),
             new ModuleDescriptor(MODULE_CATEGORY, "Categories"),

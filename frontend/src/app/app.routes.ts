@@ -67,6 +67,28 @@ export const routes: Routes = [
         canActivate: [permissionGuard(Permissions.SALES_VIEW)],
         loadComponent: () => import('./features/sales/sale-detail.component').then((m) => m.SaleDetailComponent),
       },
+      // --- Wholesale -------------------------------------------------------
+      {
+        path: 'wholesale/new',
+        title: 'New wholesale estimate - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.WHOLESALE_CREATE)],
+        loadComponent: () =>
+          import('./features/wholesale/wholesale-editor.component').then((m) => m.WholesaleEditorComponent),
+      },
+      {
+        path: 'wholesale',
+        title: 'Wholesale - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.WHOLESALE_VIEW)],
+        loadComponent: () =>
+          import('./features/wholesale/wholesale-list.component').then((m) => m.WholesaleListComponent),
+      },
+      {
+        path: 'wholesale/:id',
+        title: 'Wholesale estimate - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.WHOLESALE_VIEW)],
+        loadComponent: () =>
+          import('./features/wholesale/wholesale-detail.component').then((m) => m.WholesaleDetailComponent),
+      },
       {
         path: 'old-metal/new',
         title: 'Old gold purchase - Jewellery ERP',

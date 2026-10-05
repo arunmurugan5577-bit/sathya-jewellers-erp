@@ -4,5 +4,6 @@ package com.jewellery.erp.numbering;
 public enum DocumentSeries {
     SALE_INVOICE,
     OLD_METAL_PURCHASE,
-    CUSTOMER
+    CUSTOMER,
+    WHOLESALE_ESTIMATE
 }

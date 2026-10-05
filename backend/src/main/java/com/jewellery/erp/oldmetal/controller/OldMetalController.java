@@ -86,7 +86,8 @@ public class OldMetalController {
     @PreAuthorize("hasAuthority('" + PermissionCatalog.OLD_METAL_CREATE + "')")
     @Operation(
             summary = "Record an old gold / silver purchase",
-            description = "Amounts are computed on the server as net weight x rate, in whole rupees. The bill "
+            description = "Amounts are computed on the server as gross weight x rate, in whole rupees - the "
+                    + "net weight stands in when no gross weight is given. The bill "
                     + "number is issued by the server. Requires OLD_METAL_CREATE.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Created"),

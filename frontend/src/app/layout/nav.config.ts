@@ -59,6 +59,12 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     items: [
       { label: 'New Sale', route: '/sales/new', icon: icons.cart, permissions: [Permissions.SALES_CREATE] },
       { label: 'Invoices', route: '/sales', icon: icons.invoice, permissions: [Permissions.SALES_VIEW] },
+      {
+        label: 'Wholesale',
+        route: '/wholesale',
+        icon: icons.invoice,
+        permissions: [Permissions.WHOLESALE_VIEW],
+      },
       { label: 'Old Gold / Silver', route: '/old-metal', icon: icons.coins, permissions: [Permissions.OLD_METAL_VIEW] },
       { label: 'Customers', route: '/customers', icon: icons.person, permissions: [Permissions.CUSTOMER_VIEW] },
     ],
@@ -70,7 +76,11 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         label: 'Sales & Stock',
         route: '/reports',
         icon: icons.chart,
-        permissions: [Permissions.REPORT_SALES_VIEW, Permissions.REPORT_STOCK_VIEW],
+        permissions: [
+          Permissions.REPORT_SALES_VIEW,
+          Permissions.REPORT_STOCK_VIEW,
+          Permissions.REPORT_WHOLESALE_VIEW,
+        ],
       },
     ],
   },

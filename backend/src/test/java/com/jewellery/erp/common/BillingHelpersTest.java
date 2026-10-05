@@ -19,10 +19,28 @@ class BillingHelpersTest {
     }
 
     @Test
-    void oldMetalAmountIsNetWeightTimesRateInWholeRupees() {
-        // The shop's purchase bill: gold coin 8.000 g at 14,370
-        assertThat(new OldMetalCalculator().lineAmount(new BigDecimal("8.000"), new BigDecimal("14370")))
+    void oldMetalIsPaidOnTheWeightOnTheScale() {
+        OldMetalCalculator calculator = new OldMetalCalculator();
+        // Bought as weighed: the customer is paid for the stones too.
+        assertThat(calculator.lineAmount(new BigDecimal("120.000"), new BigDecimal("100.000"), new BigDecimal("100")))
+                .isEqualByComparingTo("12000");
+    }
+
+    @Test
+    void aPieceWithNothingToDeductIsPaidOnItsNetWeight() {
+        OldMetalCalculator calculator = new OldMetalCalculator();
+        // The shop's purchase bill No. 74: gold coin 8.000 g at 14,370, no
+        // gross weight because a coin has no stones to take off.
+        assertThat(calculator.lineAmount(null, new BigDecimal("8.000"), new BigDecimal("14370")))
                 .isEqualByComparingTo("114960");
+        assertThat(calculator.payableWeight(null, new BigDecimal("8.000"))).isEqualByComparingTo("8.000");
+    }
+
+    @Test
+    void thePayableWeightIsTheGrossWhenThereIsOne() {
+        OldMetalCalculator calculator = new OldMetalCalculator();
+        assertThat(calculator.payableWeight(new BigDecimal("120.000"), new BigDecimal("100.000")))
+                .isEqualByComparingTo("120.000");
     }
 
     @Test

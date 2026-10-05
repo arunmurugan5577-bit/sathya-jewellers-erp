@@ -41,7 +41,7 @@ public class OldMetalTransactionItem extends AuditableEntity {
     @JoinColumn(name = "item_type_id", nullable = false, updatable = false)
     private ItemType itemType;
 
-    /** Recorded for reference; the amount is net weight x rate, not purity-adjusted. */
+    /** Recorded for reference; the amount follows the gross weight, not this, and is not purity-adjusted. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "purity_id", updatable = false)
     private Purity purity;

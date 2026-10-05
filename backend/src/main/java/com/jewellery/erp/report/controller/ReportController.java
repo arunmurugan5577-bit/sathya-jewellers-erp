@@ -3,6 +3,8 @@ package com.jewellery.erp.report.controller;
 import com.jewellery.erp.inventory.entity.InventoryStatus;
 import com.jewellery.erp.permission.PermissionCatalog;
 import com.jewellery.erp.report.dto.ReportPreview;
+import com.jewellery.erp.wholesale.dto.WholesaleReportFilter;
+import com.jewellery.erp.wholesale.entity.WholesaleStatus;
 import com.jewellery.erp.report.service.ReportService;
 import com.jewellery.erp.report.service.SalesReportFilter;
 import com.jewellery.erp.report.service.StockReportFilter;
@@ -100,6 +102,44 @@ public class ReportController {
             @RequestParam(required = false) Long customerId) throws IOException {
         return download(reportService.exportSales(
                 new SalesReportFilter(startDate, endDate, status.toStatus(), paymentStatus, customerId)));
+    }
+
+    @GetMapping("/wholesale/preview")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.REPORT_WHOLESALE_VIEW + "')")
+    @Operation(summary = "Preview the wholesale report",
+            description = "Estimates dated between the dates, their pieces, and every party account that "
+                    + "is not square. Requires REPORT_WHOLESALE_VIEW.")
+    public ResponseEntity<ReportPreview> previewWholesale(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @Parameter(description = "COMPLETED (default), CANCELLED or ALL")
+            @RequestParam(defaultValue = "COMPLETED") WholesaleStatusFilter status,
+            @RequestParam(required = false) Long customerId) {
+        return ResponseEntity.ok(reportService.previewWholesale(
+                new WholesaleReportFilter(startDate, endDate, status.toStatus(), customerId)));
+    }
+
+    @GetMapping("/wholesale/export")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.REPORT_WHOLESALE_EXPORT + "')")
+    @Operation(summary = "Download the wholesale report as Excel",
+            description = "Three sheets: Estimates, Items, Party Balances. Requires REPORT_WHOLESALE_EXPORT.")
+    public ResponseEntity<InputStreamResource> exportWholesale(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "COMPLETED") WholesaleStatusFilter status,
+            @RequestParam(required = false) Long customerId) throws IOException {
+        return download(reportService.exportWholesale(
+                new WholesaleReportFilter(startDate, endDate, status.toStatus(), customerId)));
+    }
+
+    public enum WholesaleStatusFilter {
+        COMPLETED,
+        CANCELLED,
+        ALL;
+
+        WholesaleStatus toStatus() {
+            return this == ALL ? null : WholesaleStatus.valueOf(name());
+        }
     }
 
     public enum SaleStatusFilter {

@@ -4,6 +4,7 @@ import com.jewellery.erp.common.config.BusinessClock;
 import com.jewellery.erp.common.exception.BusinessRuleException;
 import com.jewellery.erp.common.exception.ErrorCode;
 import com.jewellery.erp.report.dto.ReportPreview;
+import com.jewellery.erp.wholesale.dto.WholesaleReportFilter;
 import com.jewellery.erp.report.engine.ExcelReportWriter;
 import com.jewellery.erp.report.engine.ReportColumn;
 import com.jewellery.erp.report.engine.ReportDefinition;
@@ -87,6 +88,14 @@ public class ReportService {
         return export(salesDefinition(filter));
     }
 
+    public ReportPreview previewWholesale(WholesaleReportFilter filter) {
+        return preview(wholesaleDefinition(filter));
+    }
+
+    public ReportFile exportWholesale(WholesaleReportFilter filter) {
+        return export(wholesaleDefinition(filter));
+    }
+
     // ------------------------------------------------------------- helpers ---
 
     private ReportDefinition stockDefinition(StockReportFilter filter) {
@@ -108,6 +117,15 @@ public class ReportService {
             labels.put("customer", name("customers", "full_name", filter.customerId()));
         }
         return definitions.sales(filter, labels);
+    }
+
+    private ReportDefinition wholesaleDefinition(WholesaleReportFilter filter) {
+        validateRange(filter.startDate(), filter.endDate());
+        Map<String, String> labels = new HashMap<>();
+        if (filter.customerId() != null) {
+            labels.put("customer", name("customers", "full_name", filter.customerId()));
+        }
+        return definitions.wholesale(filter, labels);
     }
 
     private ReportPreview preview(ReportDefinition definition) {
