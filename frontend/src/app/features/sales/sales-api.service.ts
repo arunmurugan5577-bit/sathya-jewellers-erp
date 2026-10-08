@@ -40,8 +40,8 @@ export class CustomerApiService {
     return this.api.get<Page<Customer>>('/customers', { ...paging(query), search, active });
   }
 
-  lookup(q: string): Observable<CustomerSummary[]> {
-    return this.api.get<CustomerSummary[]>('/customers/lookup', { q });
+  lookup(q: string, context?: HttpContext): Observable<CustomerSummary[]> {
+    return this.api.get<CustomerSummary[]>('/customers/lookup', { q }, context);
   }
 
   get(id: number): Observable<Customer> {
