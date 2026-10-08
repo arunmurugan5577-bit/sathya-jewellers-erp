@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jewellery.erp.common.dto.PageResponse;
 import com.jewellery.erp.inventory.controller.InventoryItemController;
 import com.jewellery.erp.inventory.service.InventoryItemService;
+import com.jewellery.erp.numbering.SerialCounterService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,7 @@ class InventoryEndpointSecurityTest {
     @Autowired private MockMvc mockMvc;
 
     @MockBean private InventoryItemService inventoryItemService;
+    @MockBean private SerialCounterService serialCounterService;
 
     /** Required by the authentication provider; never exercised by these tests. */
     @MockBean private AppUserDetailsService appUserDetailsService;
@@ -125,11 +127,11 @@ class InventoryEndpointSecurityTest {
 
     @Test
     @WithMockUser(username = "staff1", authorities = {"INVENTORY_CREATE"})
-    @DisplayName("a five digit serial number is rejected with a field level message")
+    @DisplayName("a too-short serial number is rejected with a field level message")
     void rejectsMalformedSerialNumber() throws Exception {
         String body = """
                 {
-                  "serialNumber": "12345",
+                  "serialNumber": "12",
                   "itemTypeId": 1,
                   "purityId": 2,
                   "categoryId": 3,
@@ -141,7 +143,7 @@ class InventoryEndpointSecurityTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Validation Error"))
-                .andExpect(jsonPath("$.fieldErrors.serialNumber").value("Serial number must be exactly 6 digits"));
+                .andExpect(jsonPath("$.fieldErrors.serialNumber").value("Serial number must be 3 to 6 digits"));
 
         verify(inventoryItemService, never()).create(any());
     }

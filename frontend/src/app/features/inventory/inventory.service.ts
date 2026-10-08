@@ -39,6 +39,24 @@ export class InventoryService {
     return this.api.put<InventoryItem>(`/inventory/items/${id}`, request, context);
   }
 
+  /** Where serial numbering starts. Administrators only. */
+  serialCounter(): Observable<{ nextValue: number; nextSerialNumber: string }> {
+    return this.api.get<{ nextValue: number; nextSerialNumber: string }>(
+      '/inventory/items/serial-counter',
+    );
+  }
+
+  setSerialCounter(
+    nextValue: number,
+    context?: HttpContext,
+  ): Observable<{ nextValue: number; nextSerialNumber: string }> {
+    return this.api.put<{ nextValue: number; nextSerialNumber: string }>(
+      '/inventory/items/serial-counter',
+      { nextValue },
+      context,
+    );
+  }
+
   setActive(id: number, active: boolean): Observable<InventoryItem> {
     return this.api.patch<InventoryItem>(`/inventory/items/${id}/status`, { active });
   }

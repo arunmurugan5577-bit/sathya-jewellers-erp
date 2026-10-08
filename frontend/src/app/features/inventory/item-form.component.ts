@@ -70,25 +70,23 @@ import { InventoryService } from './inventory.service';
             <div class="card__body">
               <div class="form-grid">
                 <div class="field">
-                  <label class="field__label field__label--required" for="serialNumber">
-                    Serial number
-                  </label>
-                  <div class="row">
-                    <input
-                      id="serialNumber"
-                      class="input serial"
-                      formControlName="serialNumber"
-                      inputmode="numeric"
-                      maxlength="6"
-                      [class.input--invalid]="invalid('serialNumber')"
-                    />
-                    @if (!isEdit()) {
-                      <button type="button" class="btn btn--sm" (click)="suggestSerial()">
-                        Suggest
-                      </button>
-                    }
-                  </div>
-                  <p class="field__hint">Exactly 6 digits. Leading zeros are kept.</p>
+                  <label class="field__label" for="serialNumber">Serial number</label>
+                  <input
+                    id="serialNumber"
+                    class="input serial"
+                    formControlName="serialNumber"
+                    inputmode="numeric"
+                    maxlength="6"
+                    readonly
+                    [class.input--invalid]="invalid('serialNumber')"
+                  />
+                  @if (isEdit()) {
+                    <p class="field__hint">Fixed once the piece exists - it is printed on the tag.</p>
+                  } @else {
+                    <p class="field__hint">
+                      Issued automatically when you save. The number shown is the next one in the run.
+                    </p>
+                  }
                   <app-field-error [control]="form.controls.serialNumber" label="Serial number" />
                 </div>
               </div>
@@ -277,10 +275,9 @@ export class ItemFormComponent implements OnInit {
   protected readonly hsnCodes = signal<Lookup[]>([]);
 
   protected readonly form = this.formBuilder.group({
-    serialNumber: this.formBuilder.nonNullable.control('', [
-      Validators.required,
-      Validators.pattern(/^[0-9]{6}$/),
-    ]),
+    // Shown, never typed: the server issues it on save. Kept in the form so
+    // editing still sends the piece's own number back.
+    serialNumber: this.formBuilder.nonNullable.control(''),
     itemTypeId: this.formBuilder.control<number | null>(null, Validators.required),
     purityId: this.formBuilder.control<number | null>(null, Validators.required),
     categoryId: this.formBuilder.control<number | null>(null, Validators.required),

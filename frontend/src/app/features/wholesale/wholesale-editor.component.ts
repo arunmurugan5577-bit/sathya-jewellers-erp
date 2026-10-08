@@ -429,7 +429,7 @@ export class WholesaleEditorComponent {
     if (!serial || this.scanning()) {
       return;
     }
-    const canonical = serial.padStart(6, '0');
+    const canonical = serial.padStart(3, '0');
     if (this.rows().some((row) => row.lookup?.serialNumber === canonical)) {
       this.scanValue.set('');
       this.scanStatus.set(null);

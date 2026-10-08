@@ -492,7 +492,7 @@ export class SaleEditorComponent {
   }
 
   protected priced(serial: string): SaleLine | undefined {
-    return this.pricedBySerial().get(serial.trim().padStart(6, '0'));
+    return this.pricedBySerial().get(serial.trim().padStart(3, '0'));
   }
 
   protected schedule(): void {
@@ -571,7 +571,7 @@ export class SaleEditorComponent {
     if (!serial || this.scanning()) {
       return;
     }
-    const canonical = serial.padStart(6, '0');
+    const canonical = serial.padStart(3, '0');
     if (this.rows().some((row) => row.lookup?.serialNumber === canonical)) {
       this.scanValue.set('');
       this.scanStatus.set(null);
@@ -650,7 +650,7 @@ export class SaleEditorComponent {
     const row = this.rows()[index];
     const digits = value.replace(/\D/g, '');
     // Editing the serial invalidates what was loaded for the old one.
-    this.patch(index, { serial: digits, lookup: row.lookup && row.lookup.serialNumber === digits.padStart(6, '0') ? row.lookup : null, lookupError: null });
+    this.patch(index, { serial: digits, lookup: row.lookup && row.lookup.serialNumber === digits.padStart(3, '0') ? row.lookup : null, lookupError: null });
   }
 
   /** Enter (or a barcode scanner's trailing Enter) looks the piece up straight away. */
@@ -664,10 +664,10 @@ export class SaleEditorComponent {
   protected lookup(index: number): void {
     const row = this.rows()[index];
     const serial = row.serial.trim();
-    if (!serial || row.looking || (row.lookup && row.lookup.serialNumber === serial.padStart(6, '0'))) {
+    if (!serial || row.looking || (row.lookup && row.lookup.serialNumber === serial.padStart(3, '0'))) {
       return;
     }
-    const canonical = serial.padStart(6, '0');
+    const canonical = serial.padStart(3, '0');
     const duplicate = this.rows().some((other, i) => i !== index && other.lookup?.serialNumber === canonical);
     if (duplicate) {
       this.patch(index, { lookupError: `Serial ${canonical} is already on this invoice.` });

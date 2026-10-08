@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import com.jewellery.erp.numbering.DocumentSeries;
 import static org.mockito.Mockito.when;
 
 import com.jewellery.erp.category.entity.Category;
@@ -15,6 +17,8 @@ import com.jewellery.erp.common.exception.BusinessRuleException;
 import com.jewellery.erp.common.exception.DuplicateResourceException;
 import com.jewellery.erp.hsn.service.HsnCodeService;
 import com.jewellery.erp.inventory.dto.InventoryItemRequest;
+import com.jewellery.erp.numbering.DocumentNumberService;
+import com.jewellery.erp.numbering.SerialCounterService;
 import com.jewellery.erp.inventory.entity.InventoryItem;
 import com.jewellery.erp.inventory.mapper.InventoryItemMapper;
 import com.jewellery.erp.inventory.repository.InventoryItemRepository;
@@ -41,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * serial number, and master references that are consistent with each other.
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class InventoryItemServiceTest {
 
     @Mock private InventoryItemRepository inventoryItemRepository;
@@ -49,6 +54,8 @@ class InventoryItemServiceTest {
     @Mock private CategoryService categoryService;
     @Mock private SubCategoryService subCategoryService;
     @Mock private HsnCodeService hsnCodeService;
+    @Mock private DocumentNumberService documentNumberService;
+    @Mock private SerialCounterService serialCounterService;
 
     private InventoryItemService service;
 
@@ -64,7 +71,9 @@ class InventoryItemServiceTest {
                 categoryService,
                 subCategoryService,
                 hsnCodeService,
-                new InventoryItemMapper());
+                new InventoryItemMapper(),
+                documentNumberService,
+                serialCounterService);
 
         gold = new ItemType();
         gold.setId(1L);
@@ -102,79 +111,81 @@ class InventoryItemServiceTest {
     class SerialNumber {
 
         @Test
-        @DisplayName("a duplicate is rejected with a message naming the number")
-        void rejectsDuplicateSerialNumber() {
-            when(inventoryItemRepository.existsBySerialNumber("123456")).thenReturn(true);
-
-            assertThatThrownBy(() -> service.create(request("123456")))
-                    .isInstanceOf(DuplicateResourceException.class)
-                    .hasMessage("Serial number 123456 already exists.")
-                    .extracting(exception -> ((DuplicateResourceException) exception).getField())
-                    .isEqualTo("serialNumber");
-
-            verify(inventoryItemRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("leading zeros are preserved, not swallowed by a numeric conversion")
-        void preservesLeadingZeros() {
+        @DisplayName("the counter issues the number; anything the caller sent is ignored")
+        void theCounterIssuesTheSerialNumber() {
             stubValidReferences();
-            when(inventoryItemRepository.existsBySerialNumber("000001")).thenReturn(false);
+            when(documentNumberService.next(eq(DocumentSeries.INVENTORY_SERIAL), any()))
+                    .thenReturn("001");
+            when(inventoryItemRepository.existsBySerialNumber("001")).thenReturn(false);
             when(inventoryItemRepository.save(any(InventoryItem.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            service.create(request("000001"));
-
-            ArgumentCaptor<InventoryItem> saved = ArgumentCaptor.forClass(InventoryItem.class);
-            verify(inventoryItemRepository).save(saved.capture());
-            assertThat(saved.getValue().getSerialNumber()).isEqualTo("000001");
+            // The caller asks for 999999 and gets what the counter says.
+            assertThat(service.create(request("999999")).serialNumber()).isEqualTo("001");
         }
 
         @Test
-        @DisplayName("a short number is padded so the same piece cannot be entered twice")
-        void padsShortSerialNumber() {
+        @DisplayName("a number already on a piece is stepped over, not refused")
+        void stepsOverTakenNumbers() {
+            // The shop had tags before the counter existed, so a run can land on
+            // numbers that are already out there. That is a fact about old stock,
+            // not a mistake the person adding a piece can do anything about.
             stubValidReferences();
-            when(inventoryItemRepository.existsBySerialNumber("000042")).thenReturn(false);
+            when(documentNumberService.next(eq(DocumentSeries.INVENTORY_SERIAL), any()))
+                    .thenReturn("001", "002", "003");
+            when(inventoryItemRepository.existsBySerialNumber("001")).thenReturn(true);
+            when(inventoryItemRepository.existsBySerialNumber("002")).thenReturn(true);
+            when(inventoryItemRepository.existsBySerialNumber("003")).thenReturn(false);
             when(inventoryItemRepository.save(any(InventoryItem.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            service.create(request("42"));
-
-            ArgumentCaptor<InventoryItem> saved = ArgumentCaptor.forClass(InventoryItem.class);
-            verify(inventoryItemRepository).save(saved.capture());
-            assertThat(saved.getValue().getSerialNumber()).isEqualTo("000042");
+            assertThat(service.create(request("000123")).serialNumber()).isEqualTo("003");
         }
 
         @Test
-        @DisplayName("more than six digits is rejected")
-        void rejectsTooLongSerialNumber() {
-            assertThatThrownBy(() -> service.create(request("1234567")))
-                    .isInstanceOf(BusinessRuleException.class)
-                    .hasMessageContaining("up to 6");
+        @DisplayName("the next serial comes from the counter, zero padded")
+        void peeksAtTheCounter() {
+            when(serialCounterService.peek()).thenReturn(42L);
+            when(inventoryItemRepository.existsBySerialNumber("042")).thenReturn(false);
+
+            assertThat(service.peekNextSerialNumber()).isEqualTo("042");
         }
 
         @Test
-        @DisplayName("a non-numeric serial number is rejected")
-        void rejectsNonNumericSerialNumber() {
-            assertThatThrownBy(() -> service.create(request("12A456")))
-                    .isInstanceOf(BusinessRuleException.class)
-                    .hasMessageContaining("only digits");
+        @DisplayName("the peek steps over numbers a piece already holds")
+        void peekSkipsTakenNumbers() {
+            // The shop had tags before the counter existed, so a run can land on
+            // numbers that are already out there.
+            when(serialCounterService.peek()).thenReturn(1L);
+            when(inventoryItemRepository.existsBySerialNumber("001")).thenReturn(true);
+            when(inventoryItemRepository.existsBySerialNumber("002")).thenReturn(true);
+            when(inventoryItemRepository.existsBySerialNumber("003")).thenReturn(false);
+
+            assertThat(service.peekNextSerialNumber()).isEqualTo("003");
         }
 
         @Test
-        @DisplayName("the suggested next serial continues the sequence, zero padded")
-        void suggestsNextSerialNumber() {
-            when(inventoryItemRepository.findHighestSerialNumber()).thenReturn(41);
+        @DisplayName("padding is a floor: 999 is followed by 1000, not by an error")
+        void paddingIsAFloorNotACap() {
+            when(serialCounterService.peek()).thenReturn(999L);
+            when(inventoryItemRepository.existsBySerialNumber("999")).thenReturn(false);
+            assertThat(service.peekNextSerialNumber()).isEqualTo("999");
 
-            assertThat(service.suggestNextSerialNumber()).isEqualTo("000042");
+            when(serialCounterService.peek()).thenReturn(1000L);
+            when(inventoryItemRepository.existsBySerialNumber("1000")).thenReturn(false);
+            assertThat(service.peekNextSerialNumber()).isEqualTo("1000");
+
+            when(serialCounterService.peek()).thenReturn(905_351L);
+            when(inventoryItemRepository.existsBySerialNumber("905351")).thenReturn(false);
+            assertThat(service.peekNextSerialNumber()).isEqualTo("905351");
         }
 
         @Test
         @DisplayName("exhausting the six digit range is reported, not wrapped around")
         void refusesWhenSerialRangeExhausted() {
-            when(inventoryItemRepository.findHighestSerialNumber()).thenReturn(999_999);
+            when(serialCounterService.peek()).thenReturn(1_000_000L);
 
-            assertThatThrownBy(() -> service.suggestNextSerialNumber())
+            assertThatThrownBy(() -> service.peekNextSerialNumber())
                     .isInstanceOf(BusinessRuleException.class)
                     .hasMessageContaining("exhausted");
         }
@@ -187,6 +198,8 @@ class InventoryItemServiceTest {
         @Test
         @DisplayName("a purity belonging to another item type is rejected")
         void rejectsPurityFromAnotherItemType() {
+            when(documentNumberService.next(eq(DocumentSeries.INVENTORY_SERIAL), any()))
+                    .thenReturn("000500");
             when(inventoryItemRepository.existsBySerialNumber(anyString())).thenReturn(false);
             when(itemTypeService.requireActive(1L)).thenReturn(gold);
             when(categoryService.requireActive(10L)).thenReturn(ring);
@@ -204,6 +217,8 @@ class InventoryItemServiceTest {
         @Test
         @DisplayName("a sub category belonging to another category is rejected")
         void rejectsSubCategoryFromAnotherCategory() {
+            when(documentNumberService.next(eq(DocumentSeries.INVENTORY_SERIAL), any()))
+                    .thenReturn("000500");
             when(inventoryItemRepository.existsBySerialNumber(anyString())).thenReturn(false);
             stubValidReferences();
             when(subCategoryService.requireActiveInCategory(99L, 10L))
@@ -223,6 +238,8 @@ class InventoryItemServiceTest {
         @Test
         @DisplayName("sub category and HSN are optional")
         void allowsOmittedOptionalReferences() {
+            when(documentNumberService.next(eq(DocumentSeries.INVENTORY_SERIAL), any()))
+                    .thenReturn("000500");
             stubValidReferences();
             when(inventoryItemRepository.existsBySerialNumber("000123")).thenReturn(false);
             when(inventoryItemRepository.save(any(InventoryItem.class)))
@@ -237,6 +254,8 @@ class InventoryItemServiceTest {
         @Test
         @DisplayName("the weight is stored exactly as entered, with no floating point drift")
         void storesWeightExactly() {
+            when(documentNumberService.next(eq(DocumentSeries.INVENTORY_SERIAL), any()))
+                    .thenReturn("000500");
             stubValidReferences();
             when(inventoryItemRepository.existsBySerialNumber("000123")).thenReturn(false);
             when(inventoryItemRepository.save(any(InventoryItem.class)))
@@ -260,13 +279,15 @@ class InventoryItemServiceTest {
         void allowsUnchangedSerialNumberOnSameRow() {
             InventoryItem existing = new InventoryItem();
             existing.setId(5L);
-            existing.setSerialNumber("000123");
+            existing.setSerialNumber("123");
 
             when(inventoryItemRepository.findById(5L)).thenReturn(java.util.Optional.of(existing));
-            when(inventoryItemRepository.existsBySerialNumberAndIdNot("000123", 5L)).thenReturn(false);
+            when(inventoryItemRepository.existsBySerialNumberAndIdNot("123", 5L)).thenReturn(false);
             stubValidReferences();
 
-            assertThat(service.update(5L, request("000123")).serialNumber()).isEqualTo("000123");
+            // "000123" and "123" are the same piece: the padding is normalised
+            // away so one tag cannot be entered under two spellings.
+            assertThat(service.update(5L, request("000123")).serialNumber()).isEqualTo("123");
         }
 
         @Test
@@ -274,14 +295,14 @@ class InventoryItemServiceTest {
         void rejectsSerialNumberOwnedByAnotherRow() {
             InventoryItem existing = new InventoryItem();
             existing.setId(5L);
-            existing.setSerialNumber("000123");
+            existing.setSerialNumber("123");
 
             when(inventoryItemRepository.findById(5L)).thenReturn(java.util.Optional.of(existing));
-            when(inventoryItemRepository.existsBySerialNumberAndIdNot("000999", 5L)).thenReturn(true);
+            when(inventoryItemRepository.existsBySerialNumberAndIdNot("999", 5L)).thenReturn(true);
 
             assertThatThrownBy(() -> service.update(5L, request("000999")))
                     .isInstanceOf(DuplicateResourceException.class)
-                    .hasMessageContaining("000999");
+                    .hasMessageContaining("999");
         }
     }
 }

@@ -118,6 +118,12 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         permissions: [Permissions.PURITY_VIEW],
       },
       {
+        label: 'Serial Numbering',
+        route: '/masters/serial-numbering',
+        icon: icons.barcode,
+        permissions: [Permissions.INVENTORY_SERIAL_EDIT],
+      },
+      {
         label: 'Users',
         route: '/masters/users',
         icon: icons.users,

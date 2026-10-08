@@ -23,6 +23,10 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import com.jewellery.erp.numbering.SerialCounterService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -52,9 +56,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class InventoryItemController {
 
     private final InventoryItemService inventoryItemService;
+    private final SerialCounterService serialCounterService;
 
-    public InventoryItemController(InventoryItemService inventoryItemService) {
+    public InventoryItemController(
+            InventoryItemService inventoryItemService, SerialCounterService serialCounterService) {
         this.inventoryItemService = inventoryItemService;
+        this.serialCounterService = serialCounterService;
     }
 
     @GetMapping
@@ -85,6 +92,41 @@ public class InventoryItemController {
         return ResponseEntity.ok(inventoryItemService.findAll(filter, pageable));
     }
 
+    @GetMapping("/serial-counter")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.INVENTORY_SERIAL_EDIT + "')")
+    @Operation(
+            summary = "Where serial numbering starts",
+            description = "The number the next piece will take. Requires INVENTORY_SERIAL_EDIT, "
+                    + "which only administrators hold.")
+    public ResponseEntity<Map<String, Object>> serialCounter() {
+        return ResponseEntity.ok(Map.of(
+                "nextValue", serialCounterService.peek(),
+                "nextSerialNumber", inventoryItemService.peekNextSerialNumber()));
+    }
+
+    @PutMapping("/serial-counter")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.INVENTORY_SERIAL_EDIT + "')")
+    @Operation(
+            summary = "Move where serial numbering starts",
+            description = "Sets the number the next piece will take. Numbers already on a piece are "
+                    + "stepped over when one is issued, so an overlap costs skipped values rather than "
+                    + "a duplicate tag. Requires INVENTORY_SERIAL_EDIT.")
+    public ResponseEntity<Map<String, Object>> setSerialCounter(
+            @Valid @RequestBody SerialCounterRequest request) {
+        serialCounterService.setNext(request.nextValue());
+        return ResponseEntity.ok(Map.of(
+                "nextValue", serialCounterService.peek(),
+                "nextSerialNumber", inventoryItemService.peekNextSerialNumber()));
+    }
+
+    /** Where the run starts. */
+    public record SerialCounterRequest(
+            @Schema(example = "1", description = "1 to 999999")
+            @NotNull(message = "A starting number is required")
+            @Min(value = 1, message = "The starting number must be 1 or more")
+            @Max(value = 999999, message = "The starting number must not exceed 999999")
+            Long nextValue) {}
+
     @GetMapping("/next-serial")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.INVENTORY_CREATE + "')")
     @Operation(
@@ -93,7 +135,7 @@ public class InventoryItemController {
                     + "reservation - the uniqueness check at save time is what actually guarantees it. "
                     + "Requires INVENTORY_CREATE.")
     public ResponseEntity<Map<String, String>> nextSerialNumber() {
-        return ResponseEntity.ok(Map.of("serialNumber", inventoryItemService.suggestNextSerialNumber()));
+        return ResponseEntity.ok(Map.of("serialNumber", inventoryItemService.peekNextSerialNumber()));
     }
 
     @GetMapping("/by-serial/{serialNumber}")

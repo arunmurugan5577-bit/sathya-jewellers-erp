@@ -393,4 +393,5 @@ export class ItemListComponent {
       },
     });
   }
+
 }

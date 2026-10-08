@@ -21,9 +21,12 @@ import java.math.BigDecimal;
  */
 @Schema(name = "InventoryItemRequest")
 public record InventoryItemRequest(
-        @Schema(example = "000123", description = "Exactly 6 digits. Leading zeros are preserved.")
-        @NotBlank(message = "Serial number is required")
-        @Pattern(regexp = "^[0-9]{6}$", message = "Serial number must be exactly 6 digits")
+        // Ignored when adding a piece: the counter issues the number so two
+        // pieces cannot end up with the same barcode. Still required when
+        // editing, where it identifies the piece already on the shelf.
+        @Schema(example = "001",
+                description = "Three to six digits. Assigned by the server when adding; required when editing.")
+        @Pattern(regexp = "^[0-9]{3,6}$", message = "Serial number must be 3 to 6 digits")
         String serialNumber,
 
         @Schema(example = "1")

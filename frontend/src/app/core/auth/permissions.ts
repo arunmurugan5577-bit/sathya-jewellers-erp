@@ -69,6 +69,9 @@ export const Permissions = {
   /** Change the short name and printer calibration. */
   LABEL_EDIT: 'LABEL_EDIT',
 
+  /** Set where inventory serial numbers start. Administrators only. */
+  INVENTORY_SERIAL_EDIT: 'INVENTORY_SERIAL_EDIT',
+
   /** Open wholesale estimates and party balances. */
   WHOLESALE_VIEW: 'WHOLESALE_VIEW',
   /** Raise a wholesale estimate. */

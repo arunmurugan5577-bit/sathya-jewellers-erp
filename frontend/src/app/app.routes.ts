@@ -176,6 +176,15 @@ export const routes: Routes = [
 
       // --- Users -----------------------------------------------------------
       {
+        path: 'masters/serial-numbering',
+        title: 'Serial numbering - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.INVENTORY_SERIAL_EDIT)],
+        loadComponent: () =>
+          import('./features/masters/serial-numbering/serial-numbering.component').then(
+            (m) => m.SerialNumberingComponent,
+          ),
+      },
+      {
         path: 'masters/users',
         title: 'Users - Jewellery ERP',
         canActivate: [permissionGuard(Permissions.USER_VIEW)],

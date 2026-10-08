@@ -33,6 +33,7 @@ public final class PermissionCatalog {
     public static final String MODULE_OLD_METAL = "OLD_METAL";
     public static final String MODULE_SALES = "SALES";
     public static final String MODULE_LABEL = "LABEL";
+    public static final String MODULE_INVENTORY_SERIAL = "INVENTORY_SERIAL";
     public static final String MODULE_WHOLESALE = "WHOLESALE";
     public static final String MODULE_REPORT_WHOLESALE = "REPORT_WHOLESALE";
     public static final String MODULE_REPORT_STOCK = "REPORT_STOCK";
@@ -112,6 +113,9 @@ public final class PermissionCatalog {
     /** Change the short name and the printer calibration. */
     public static final String LABEL_EDIT = "LABEL_EDIT";
 
+    /** Set where inventory serial numbers start. Administrators only. */
+    public static final String INVENTORY_SERIAL_EDIT = "INVENTORY_SERIAL_EDIT";
+
     // --- Wholesale ---------------------------------------------------------
     /** Open wholesale estimates and party balances. */
     public static final String WHOLESALE_VIEW = "WHOLESALE_VIEW";
@@ -137,6 +141,7 @@ public final class PermissionCatalog {
             new ModuleDescriptor(MODULE_OLD_METAL, "Old Gold / Silver"),
             new ModuleDescriptor(MODULE_CUSTOMER, "Customers"),
             new ModuleDescriptor(MODULE_WHOLESALE, "Wholesale"),
+            new ModuleDescriptor(MODULE_INVENTORY_SERIAL, "Serial Numbering"),
             new ModuleDescriptor(MODULE_LABEL, "Label Printing"),
             new ModuleDescriptor(MODULE_REPORT_SALES, "Sales Report"),
             new ModuleDescriptor(MODULE_REPORT_WHOLESALE, "Wholesale Report"),

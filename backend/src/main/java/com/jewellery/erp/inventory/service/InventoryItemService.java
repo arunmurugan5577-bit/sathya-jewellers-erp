@@ -3,6 +3,10 @@ package com.jewellery.erp.inventory.service;
 import com.jewellery.erp.category.entity.Category;
 import com.jewellery.erp.category.service.CategoryService;
 import com.jewellery.erp.common.dto.PageResponse;
+import com.jewellery.erp.numbering.DocumentNumberService;
+import com.jewellery.erp.numbering.DocumentSeries;
+import com.jewellery.erp.numbering.SerialCounterService;
+import java.time.LocalDate;
 import com.jewellery.erp.common.exception.BusinessRuleException;
 import com.jewellery.erp.common.exception.DuplicateResourceException;
 import com.jewellery.erp.common.exception.ErrorCode;
@@ -59,8 +63,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryItemService {
 
     private static final Logger log = LoggerFactory.getLogger(InventoryItemService.class);
-    private static final int SERIAL_NUMBER_LENGTH = 6;
+    /**
+     * Zero padded to this width, and no further.
+     *
+     * <p>001 ... 999, then 1000 and on to 999999 - the width is a floor, not
+     * a cap. Padding is how the same piece is stopped from being entered as
+     * both "1" and "001"; it is not what limits how many pieces there can be.
+     */
+    private static final int SERIAL_NUMBER_LENGTH = 3;
     private static final int MAX_SERIAL_NUMBER = 999_999;
+    /** Enough to step over a legacy block of tags without looping for ever. */
+    private static final int MAX_SERIAL_ATTEMPTS = 1000;
 
     private final InventoryItemRepository inventoryItemRepository;
     private final ItemTypeService itemTypeService;
@@ -69,6 +82,8 @@ public class InventoryItemService {
     private final SubCategoryService subCategoryService;
     private final HsnCodeService hsnCodeService;
     private final InventoryItemMapper inventoryItemMapper;
+    private final DocumentNumberService documentNumberService;
+    private final SerialCounterService serialCounterService;
 
     public InventoryItemService(
             InventoryItemRepository inventoryItemRepository,
@@ -77,7 +92,9 @@ public class InventoryItemService {
             CategoryService categoryService,
             SubCategoryService subCategoryService,
             HsnCodeService hsnCodeService,
-            InventoryItemMapper inventoryItemMapper) {
+            InventoryItemMapper inventoryItemMapper,
+            DocumentNumberService documentNumberService,
+            SerialCounterService serialCounterService) {
         this.inventoryItemRepository = inventoryItemRepository;
         this.itemTypeService = itemTypeService;
         this.purityService = purityService;
@@ -85,6 +102,8 @@ public class InventoryItemService {
         this.subCategoryService = subCategoryService;
         this.hsnCodeService = hsnCodeService;
         this.inventoryItemMapper = inventoryItemMapper;
+        this.documentNumberService = documentNumberService;
+        this.serialCounterService = serialCounterService;
     }
 
     // ------------------------------------------------------------- queries ---
@@ -116,14 +135,46 @@ public class InventoryItemService {
      * check with a clear message. Reserving numbers would leave gaps whenever a
      * form is abandoned, which a physical serial sequence cannot have.
      */
-    public String suggestNextSerialNumber() {
-        int next = inventoryItemRepository.findHighestSerialNumber() + 1;
+    /**
+     * What the next piece will be numbered, without taking the number.
+     *
+     * <p>A peek, for the form to show. Two people opening the form together see
+     * the same figure; the number that matters is the one taken under lock when
+     * the piece is actually saved.
+     */
+    public String peekNextSerialNumber() {
+        long next = serialCounterService.peek();
+        // Skipped here too, so the form shows what will really be issued.
+        while (next <= MAX_SERIAL_NUMBER && inventoryItemRepository.existsBySerialNumber(pad((int) next))) {
+            next++;
+        }
         if (next > MAX_SERIAL_NUMBER) {
             throw new BusinessRuleException(
                     "The 6 digit serial number range is exhausted. Serial numbers must be widened before "
                             + "more stock can be added.");
         }
-        return pad(next);
+        return pad((int) next);
+    }
+
+    /**
+     * Takes the next serial, stepping over any that a piece already holds.
+     *
+     * <p>Numbers can already be in use: the shop had tags before the counter
+     * existed, and an administrator may move the counter back over them. Those
+     * are stepped over rather than refused, because a clash is a fact about old
+     * stock and not a mistake the person adding a piece can do anything about.
+     */
+    private String issueSerialNumber() {
+        for (int attempt = 0; attempt < MAX_SERIAL_ATTEMPTS; attempt++) {
+            String candidate = documentNumberService.next(DocumentSeries.INVENTORY_SERIAL, LocalDate.now());
+            if (!inventoryItemRepository.existsBySerialNumber(candidate)) {
+                return candidate;
+            }
+            log.info("Serial number {} is already taken; stepping past it", candidate);
+        }
+        throw new BusinessRuleException(
+                "Could not find a free serial number after " + MAX_SERIAL_ATTEMPTS + " tries. "
+                        + "Move the starting number past the serials already in stock.");
     }
 
     /** Dashboard metrics, gathered in one place so the controller stays thin. */
@@ -139,14 +190,17 @@ public class InventoryItemService {
 
     // ------------------------------------------------------------ commands ---
 
+    /**
+     * Adds a piece. The serial number is issued here, not supplied.
+     *
+     * <p>A serial identifies one physical piece and is printed on its tag as a
+     * barcode, so a duplicate puts the same barcode on two pieces. The counter
+     * is locked and incremented inside this transaction: a piece that fails to
+     * save gives its number back rather than leaving a hole in the run.
+     */
     @Transactional
     public InventoryItemDto create(InventoryItemRequest request) {
-        String serialNumber = normalizeSerial(request.serialNumber());
-
-        if (inventoryItemRepository.existsBySerialNumber(serialNumber)) {
-            throw new DuplicateResourceException(
-                    "serialNumber", "Serial number %s already exists.".formatted(serialNumber));
-        }
+        String serialNumber = issueSerialNumber();
 
         InventoryItem entity = new InventoryItem();
         entity.setSerialNumber(serialNumber);
@@ -345,8 +399,10 @@ public class InventoryItemService {
     /**
      * Normalises a serial number to its canonical 6 digit form.
      *
-     * <p>Accepts "123" from a keyboard and stores "000123", so the same physical
+     * <p>Accepts "1" from a keyboard and stores "001", so the same physical
      * piece cannot be entered twice under two spellings of the same number.
+     * A number already wider than the padding is left as it is: 905351 is
+     * itself, not something longer.
      */
     private static String normalizeSerial(String raw) {
         String trimmed = StringNormalizer.trimToNull(raw);

@@ -54,14 +54,14 @@
 --  ===========================================================================
 --
 --  The tables already exist, so Flyway must be told not to re-create them.
---  Start the backend once with a baseline at version 21:
+--  Start the backend once with a baseline at version 23:
 --
 --    mvn spring-boot:run -Dspring-boot.run.jvmArguments="\
 --      -Dspring.flyway.baseline-on-migrate=true \
---      -Dspring.flyway.baseline-version=21"
+--      -Dspring.flyway.baseline-version=23"
 --
 --  (start-backend.ps1 already passes these.) Flyway then records the schema as
---  being at V21 and applies only later migrations.
+--  being at V23 and applies only later migrations.
 --  Omit those flags on every later start.
 --
 --  Alternatively, skip this file entirely and let Flyway build the schema from
@@ -1679,6 +1679,90 @@ SELECT r.id, p.id
    AND NOT EXISTS (
        SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
 
+-- ---------------------------------------------------------------------------
+-- V22__inventory_serial_numbering.sql
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- V22: serial numbers are issued by the application, not typed.
+--
+-- A serial number identifies one physical piece and is printed on its tag as a
+-- barcode. Typing it invites the two mistakes that matter most: a duplicate,
+-- which puts the same barcode on two pieces, and a gap, which makes a stock
+-- count look wrong. So the counter issues them, one after another.
+--
+-- It reuses the document numbering already in place for invoices: the counter
+-- row is locked and incremented inside the caller's transaction, so a piece
+-- that fails to save gives its number back rather than leaving a hole.
+--
+-- Format: six digits, no prefix and no period - 000001, 000002, ... - which is
+-- what the existing tags carry and what the barcode encodes.
+-- ===========================================================================
+
+INSERT INTO document_series (code, description, prefix, separator_char, period_format, pad_width, max_length, updated_by)
+VALUES ('INVENTORY_SERIAL', 'Inventory piece serial number', '', '', 'NONE', 6, 6, 'system');
+
+-- Starts at 1 so the first piece is 000001. The shop can move it: see the
+-- permission below.
+INSERT INTO document_counters (series_code, period_key, next_value)
+VALUES ('INVENTORY_SERIAL', 'ALL', 1)
+ON CONFLICT (series_code, period_key) DO NOTHING;
+
+-- --- who may move the counter ---------------------------------------------
+-- Its own module rather than INVENTORY_EDIT: changing where the numbering
+-- starts affects every tag printed afterwards, which is not the same kind of
+-- decision as correcting a weight. Granted to administrators only.
+INSERT INTO permissions (code, module, action, description) VALUES
+    ('INVENTORY_SERIAL_EDIT', 'INVENTORY_SERIAL', 'EDIT', 'Set where inventory serial numbers start');
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+  FROM roles r
+  CROSS JOIN permissions p
+ WHERE r.name = 'ROLE_ADMIN'
+   AND p.code = 'INVENTORY_SERIAL_EDIT'
+   AND NOT EXISTS (
+       SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+
+COMMENT ON TABLE document_counters IS
+    'Next number per series and period. period_key is ALL for series that never reset. '
+    'INVENTORY_SERIAL is where inventory serial numbers are issued from.';
+
+-- ---------------------------------------------------------------------------
+-- V23__serial_three_digits.sql
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- V23: serial numbers are three digits, and grow.
+--
+-- Six digits was a guess that made the shop's first tag read 000001. It wants
+-- 001. So the number is padded to three and no further: 001 ... 999, then
+-- 1000, 1001, out to 999999, which is as far as the column goes.
+--
+-- Padding is presentation, not identity. A tag printed 001 and a tag printed
+-- 000001 would be the same piece, which is exactly the confusion the padding
+-- exists to prevent - so the width is fixed in one place (the series row) and
+-- everything that reads a serial normalises through it.
+--
+-- Tags already printed with six digits keep their numbers: 905351 pads to
+-- itself, and nothing in the range below 100 is in use.
+-- ===========================================================================
+
+UPDATE document_series
+   SET pad_width = 3, updated_by = 'system'
+ WHERE code = 'INVENTORY_SERIAL';
+
+-- The stored format widens to let a three digit number in. Still at most six,
+-- because that is the column and the counter's ceiling.
+ALTER TABLE inventory_items DROP CONSTRAINT ck_inventory_items_serial;
+ALTER TABLE inventory_items
+    ADD CONSTRAINT ck_inventory_items_serial CHECK (serial_number ~ '^[0-9]{3,6}$');
+
+ALTER TABLE sale_items DROP CONSTRAINT ck_sale_items_serial;
+ALTER TABLE sale_items
+    ADD CONSTRAINT ck_sale_items_serial CHECK (serial_number ~ '^[0-9]{3,6}$');
+
+COMMENT ON COLUMN inventory_items.serial_number IS
+    'Three to six digits, zero padded to three. Issued by the INVENTORY_SERIAL counter and printed as the barcode.';
+
 -- --- Demo shop details -----------------------------------------------------
 -- Printed at the top of every invoice and purchase bill. Placeholder values:
 -- correct them on the Shop Settings screen. GSTIN is deliberately left empty -
@@ -1888,5 +1972,5 @@ ORDER BY u.username;
 \echo '  used for anything real.'
 \echo ''
 \echo '  Start the backend ONCE with:'
-\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=21'
+\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=23'
 \echo '###########################################################################'
