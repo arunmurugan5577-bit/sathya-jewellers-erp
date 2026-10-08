@@ -5,3 +5,12 @@ server.url=https://your-erp-domain.com/api
 # "Print barcode labels" permission and nothing else.
 agent.username=print-agent
 agent.password=
+
+# Which printer on this PC the labels go to.
+#
+# Leave blank to use whatever Windows calls the default - but naming it here
+# means tags cannot end up on the office printer because someone changed the
+# default. The agent prints the exact names it can see when it starts.
+#
+# A printer chosen in Label Settings on the server overrides this.
+printer.name=Bar Code Printer T-9650 Plus

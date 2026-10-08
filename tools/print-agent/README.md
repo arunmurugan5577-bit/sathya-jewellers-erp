@@ -41,9 +41,16 @@ keep its permissions to the minimum.
 server.url=https://your-erp-domain.com/api
 agent.username=print-agent
 agent.password=the-password-you-just-set
+printer.name=Bar Code Printer T-9650 Plus
 ```
 
 Note the `/api` on the end of the URL.
+
+`printer.name` is worth setting. Without it the agent uses whatever Windows
+calls the default printer, and that is a machine-wide setting anyone can
+change — the counter PC usually has an office printer on it too, and a tag
+must not end up on A4. The agent prints the exact names it can see when it
+starts; copy one of those.
 
 **3. Start it:**
 
@@ -64,6 +71,22 @@ It prints the printers it can see and then waits. Leave the window open.
 In the application: Labels → Settings → **Where labels print** →
 *Printer at the shop (via the print agent)*. The printer dropdown will now list
 the printers the agent reported, not the server's. Choose the label printer.
+
+## Which printer a page goes to
+
+Three places decide it, most specific first:
+
+1. The printer chosen in **Labels → Settings** on the server, which travels
+   with the page.
+2. `printer.name` in this agent's configuration.
+3. Failing both, whatever Windows calls the default printer.
+
+So leaving Label Settings on *"Use this computer's default printer"* is fine
+as long as `printer.name` is set here. If neither is set and the counter PC's
+default is the office printer, that is where the tags will go.
+
+A name that is not installed is reported rather than quietly swapped, and the
+message says which of the three it came from.
 
 ## Starting it automatically
 
@@ -96,9 +119,10 @@ one user may not be visible to a service account.
 off, or it cannot reach the server. Look at the agent window: it prints why on
 every failed attempt.
 
-**"printer ... is not installed on this PC".** The name in Labels → Settings
-does not match a printer on the counter PC. The agent lists the exact names it
-can see when it starts.
+**"printer ... is not installed on this PC".** The name does not match a
+printer on the counter PC. The message says where the name came from — Labels
+→ Settings, or `printer.name` here. The agent lists the exact names it can see
+when it starts; copy one of those.
 
 **Pages queue but never print.** Check the agent window for errors. Failed pages
 are counted on the settings screen.

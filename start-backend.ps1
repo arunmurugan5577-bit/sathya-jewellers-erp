@@ -73,12 +73,12 @@ New-Item -ItemType Directory -Force -Path $socketTmp | Out-Null
 
 # --- Flyway ----------------------------------------------------------------
 # The tables came from database\full-setup-dev.sql, not from Flyway, so Flyway
-# is told the schema is already at V23 (what that script now builds) and should
+# is told the schema is already at V24 (what that script now builds) and should
 # apply only later migrations. A database set up with the OLDER script already
 # has its Flyway history row, so for it these flags do nothing. Once
 # the baseline row exists these flags are a no-op, but they are harmless.
 & $java `
     "-Djdk.net.unixdomain.tmpdir=$socketTmp" `
     '-Dspring.flyway.baseline-on-migrate=true' `
-    '-Dspring.flyway.baseline-version=23' `
+    '-Dspring.flyway.baseline-version=24' `
     '-jar' $jar

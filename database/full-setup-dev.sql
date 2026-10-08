@@ -54,14 +54,14 @@
 --  ===========================================================================
 --
 --  The tables already exist, so Flyway must be told not to re-create them.
---  Start the backend once with a baseline at version 23:
+--  Start the backend once with a baseline at version 24:
 --
 --    mvn spring-boot:run -Dspring-boot.run.jvmArguments="\
 --      -Dspring.flyway.baseline-on-migrate=true \
---      -Dspring.flyway.baseline-version=23"
+--      -Dspring.flyway.baseline-version=24"
 --
 --  (start-backend.ps1 already passes these.) Flyway then records the schema as
---  being at V23 and applies only later migrations.
+--  being at V24 and applies only later migrations.
 --  Omit those flags on every later start.
 --
 --  Alternatively, skip this file entirely and let Flyway build the schema from
@@ -1763,6 +1763,33 @@ ALTER TABLE sale_items
 COMMENT ON COLUMN inventory_items.serial_number IS
     'Three to six digits, zero padded to three. Issued by the INVENTORY_SERIAL counter and printed as the barcode.';
 
+-- ---------------------------------------------------------------------------
+-- V24__label_no_logo.sql
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- V24: the tag carries the shop's short name, not its logo.
+--
+-- The logo reads at 203 dpi, but it is a solid dark square on a tag only 12 mm
+-- tall, and the shop does not want it there. The short name is what a jeweller
+-- actually needs beside the barcode: it says whose stock the piece is when a
+-- tag turns up loose in a tray.
+--
+-- LOGO stays a choice on the settings screen - the artwork, the layout and the
+-- thresholding are all still in place - so turning it back on is one dropdown
+-- and no migration. Only the default changes, and this shop's current setting.
+-- ===========================================================================
+
+ALTER TABLE label_settings
+    ALTER COLUMN shop_mark SET DEFAULT 'TEXT';
+
+UPDATE label_settings
+   SET shop_mark  = 'TEXT',
+       updated_by = 'system'
+ WHERE id = 1;
+
+COMMENT ON COLUMN label_settings.shop_mark IS
+    'What is printed beside the barcode: the shop short name as TEXT (default), its LOGO, or NONE.';
+
 -- --- Demo shop details -----------------------------------------------------
 -- Printed at the top of every invoice and purchase bill. Placeholder values:
 -- correct them on the Shop Settings screen. GSTIN is deliberately left empty -
@@ -1972,5 +1999,5 @@ ORDER BY u.username;
 \echo '  used for anything real.'
 \echo ''
 \echo '  Start the backend ONCE with:'
-\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=23'
+\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=24'
 \echo '###########################################################################'

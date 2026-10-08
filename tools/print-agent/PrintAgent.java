@@ -63,6 +63,8 @@ public final class PrintAgent {
     private final String baseUrl;
     private final String username;
     private final String password;
+    /** The printer this PC should use when the server does not name one. */
+    private final String configuredPrinter;
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -70,10 +72,11 @@ public final class PrintAgent {
 
     private String token;
 
-    PrintAgent(String baseUrl, String username, String password) {
+    PrintAgent(String baseUrl, String username, String password, String configuredPrinter) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.username = username;
         this.password = password;
+        this.configuredPrinter = configuredPrinter == null ? "" : configuredPrinter.trim();
     }
 
     public static void main(String[] args) throws Exception {
@@ -91,16 +94,32 @@ public final class PrintAgent {
         String url = required(config, "server.url");
         String user = required(config, "agent.username");
         String pass = required(config, "agent.password");
+        // Optional. Without it the agent falls back to whatever Windows calls
+        // the default printer, which is a machine-wide setting anyone can
+        // change - not something label printing should depend on.
+        String printer = config.getProperty("printer.name", "").trim();
 
         System.out.println("Sathya Jewellers print agent " + VERSION);
         System.out.println("  server : " + url);
         System.out.println("  user   : " + user);
+        List<String> printers = localPrinters();
         System.out.println("  printers on this PC:");
-        for (String p : localPrinters()) {
-            System.out.println("    - " + p);
+        for (String p : printers) {
+            System.out.println("    - " + p + (p.equalsIgnoreCase(printer) ? "   <- configured" : ""));
+        }
+        if (printer.isEmpty()) {
+            PrintService fallback = PrintServiceLookup.lookupDefaultPrintService();
+            System.out.println("  printer    : not set, so Windows' default ("
+                    + (fallback == null ? "none installed" : fallback.getName()) + ")");
+            System.out.println("               Set printer.name in the configuration to pin one.");
+        } else if (printers.stream().noneMatch(p -> p.equalsIgnoreCase(printer))) {
+            System.out.println("  printer    : \"" + printer + "\" is NOT installed on this PC.");
+            System.out.println("               Printing will fail until the name matches one above.");
+        } else {
+            System.out.println("  printer    : " + printer);
         }
         System.out.println("Working. Leave this window open. Ctrl+C to stop.");
-        new PrintAgent(url, user, pass).run();
+        new PrintAgent(url, user, pass, printer).run();
     }
 
     private static String required(Properties config, String key) {
@@ -120,6 +139,12 @@ public final class PrintAgent {
                 # "Print barcode labels" permission and nothing else.
                 agent.username=print-agent
                 agent.password=
+
+                # Which printer on this PC the labels go to. Leave blank to use
+                # whatever Windows calls the default - but naming it here means
+                # tags cannot end up on the office printer because someone
+                # changed the default.
+                printer.name=Bar Code Printer T-9650 Plus
                 """;
         Files.writeString(path, sample, StandardCharsets.UTF_8);
     }
@@ -238,7 +263,7 @@ public final class PrintAgent {
         if (page == null) {
             throw new IllegalStateException("the page image could not be decoded");
         }
-        PrintService service = findPrinter(printerName);
+        PrintService service = choosePrinter(printerName);
         PrinterJob job = PrinterJob.getPrinterJob();
         job.setPrintService(service);
         job.setJobName("Jewellery label");
@@ -271,20 +296,43 @@ public final class PrintAgent {
         job.print(attributes);
     }
 
-    private static PrintService findPrinter(String name) {
-        if (name != null && !name.isBlank() && !"null".equals(name)) {
-            for (PrintService service : PrintServiceLookup.lookupPrintServices(null, null)) {
-                if (service.getName().equalsIgnoreCase(name.trim())) {
-                    return service;
-                }
-            }
-            throw new IllegalStateException("printer \"" + name + "\" is not installed on this PC");
+    /**
+     * Which printer a page goes to.
+     *
+     * <p>Three places it can be decided, most specific first: the printer
+     * chosen in label settings and carried on the page, the one pinned in this
+     * agent's configuration, and failing both, whatever Windows calls the
+     * default. The middle one exists because the Windows default is a
+     * machine-wide setting that anyone can change - the counter PC has an
+     * office printer on it too, and a tag must not end up on A4.
+     */
+    private PrintService choosePrinter(String fromServer) {
+        if (isNamed(fromServer)) {
+            return byName(fromServer.trim(), "label settings");
+        }
+        if (isNamed(configuredPrinter)) {
+            return byName(configuredPrinter, "this agent's configuration");
         }
         PrintService fallback = PrintServiceLookup.lookupDefaultPrintService();
         if (fallback == null) {
-            throw new IllegalStateException("this PC has no default printer");
+            throw new IllegalStateException(
+                    "no printer chosen in label settings, none set in printer.name, and this PC has no default");
         }
         return fallback;
+    }
+
+    private static boolean isNamed(String name) {
+        return name != null && !name.isBlank() && !"null".equals(name);
+    }
+
+    private static PrintService byName(String name, String source) {
+        for (PrintService service : PrintServiceLookup.lookupPrintServices(null, null)) {
+            if (service.getName().equalsIgnoreCase(name)) {
+                return service;
+            }
+        }
+        throw new IllegalStateException(
+                "printer \"" + name + "\" (from " + source + ") is not installed on this PC");
     }
 
     static List<String> localPrinters() {

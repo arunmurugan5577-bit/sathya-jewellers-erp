@@ -37,7 +37,7 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
  *
  * Printing goes through the browser's own print path: the label document is a
  * page the exact size of the tag, handed to the Windows driver for the TVS
- * LP 46 NEO. Talking to the printer directly from a browser tab is not
+ * label printer. Talking to the printer directly from a browser tab is not
  * something a browser will do without a helper program running beside it.
  */
 @Component({

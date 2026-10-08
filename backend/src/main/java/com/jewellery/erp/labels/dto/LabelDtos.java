@@ -84,7 +84,7 @@ public final class LabelDtos {
     @Schema(name = "LabelPrintResult")
     public record PrintResult(
             @Schema(example = "5") int printed,
-            @Schema(example = "SNBC TVSE LP 46 NEO BPLE") String printer,
+            @Schema(example = "Bar Code Printer T-9650 Plus") String printer,
             @Schema(example = "true", description = "True when the pages were queued for the shop agent")
             boolean queued) {}
 
@@ -158,7 +158,7 @@ public final class LabelDtos {
             @Schema(example = "LOGO", description = "LOGO, TEXT (the short name) or NONE") String shopMark,
             @Schema(description = "Square box the logo is drawn in") BigDecimal shopLogoHeightMm,
             @Schema(description = "Type size of the name, weight and size block") BigDecimal detailFontPt,
-            @Schema(example = "SNBC TVSE LP 46 NEO BPLE", description = "Windows printer; empty uses the default")
+            @Schema(example = "Bar Code Printer T-9650 Plus", description = "Windows printer; empty uses the default")
             String printerName,
             @Schema(example = "AGENT", description = "DIRECT prints from the server; AGENT queues for the shop PC")
             String printMode,

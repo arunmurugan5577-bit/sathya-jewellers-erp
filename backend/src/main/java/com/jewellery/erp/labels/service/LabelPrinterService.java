@@ -37,8 +37,8 @@ import org.springframework.stereotype.Component;
 /**
  * Sends labels straight to the label printer - no browser, no print dialog.
  *
- * <p>The application runs on the shop's own PC, so the Windows printer the TVS
- * driver installs is visible to this process. Printing from here rather than
+ * <p>The application runs on the shop's own PC, so the Windows printer the label
+ * printer driver installs is visible to this process. Printing from here rather than
  * from the browser is what makes the page come out at 60 x 12 mm instead of
  * being laid on A4: the paper size is set on the job itself, so nothing depends
  * on whoever last changed a setting in a print dialog.
@@ -52,7 +52,7 @@ public class LabelPrinterService {
     private static final Logger log = LoggerFactory.getLogger(LabelPrinterService.class);
     /** Java2D user space is 1/72 inch, which is also what a font point is. */
     private static final double POINTS_PER_MM = 72d / 25.4d;
-    /** The head on the TVS LP 46, and every other label printer worth the name. */
+    /** 203 dpi: the head on the shop's T-9650, and on every label printer worth the name. */
     private static final double PRINT_DPI = 203d;
     /** Grey darker than this burns a dot; lighter leaves the tag blank. */
     private static final int BURN_BELOW = 150;
