@@ -26,7 +26,12 @@ public record InventoryItemDto(
         @Schema(example = "7113") String hsnCode,
         @Schema(example = "3.00") BigDecimal gstPercentage,
         @Schema(example = "16") String size,
-        @Schema(example = "5.250", description = "Net weight of the piece in grams") BigDecimal weightGrams,
+        @Schema(example = "5.250", description = "Net weight of the piece, or of the whole box, in grams")
+        BigDecimal weightGrams,
+        @Schema(example = "false", description = "A box sold by weight rather than one article")
+        boolean bulk,
+        @Schema(example = "5.250", description = "Grams still unsold. Falls invoice by invoice for a bulk box.")
+        BigDecimal remainingWeightGrams,
         String description,
         boolean active,
         @Schema(example = "AVAILABLE", description = "AVAILABLE or SOLD") String status,

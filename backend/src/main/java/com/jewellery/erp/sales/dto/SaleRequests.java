@@ -36,6 +36,13 @@ public final class SaleRequests {
             @Size(max = 200, message = "Particulars must not exceed 200 characters")
             String particulars,
 
+            @Schema(example = "4.100",
+                    description = "Weight being sold out of a bulk box. Only for bulk items; "
+                            + "a single piece is sold whole and its own weight is used.")
+            @DecimalMin(value = "0.001", message = "The weight sold must be greater than zero")
+            @Digits(integer = 9, fraction = 3, message = "Weight allows at most 3 decimal places")
+            BigDecimal weightGrams,
+
             @Schema(example = "30")
             @DecimalMin(value = "0", message = "Wastage cannot be negative")
             @DecimalMax(value = "100", message = "Wastage cannot exceed 100%")

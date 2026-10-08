@@ -24,7 +24,12 @@ public final class SaleDtos {
             String subCategoryName,
             @Schema(example = "7113") String hsnCode,
             @Schema(example = "3.00") BigDecimal gstPercentage,
-            @Schema(description = "Net weight of the piece", example = "20.800") BigDecimal netWeightGrams,
+            @Schema(description = "Net weight of the piece. For a bulk box, what is still in it.",
+                    example = "20.800") BigDecimal netWeightGrams,
+            @Schema(description = "A box sold by weight: the counter enters how much is going out.",
+                    example = "false") boolean bulk,
+            @Schema(description = "Grams still in the bulk box. Null for a single piece.",
+                    example = "92.500") BigDecimal remainingWeightGrams,
             String size,
             String description,
             @Schema(example = "Ladies Ring") String suggestedParticulars) {}

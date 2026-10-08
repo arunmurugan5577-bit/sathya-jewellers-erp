@@ -38,6 +38,10 @@ public class ReportDefinitions {
             percent("gstPercentage", "GST %"),
             text("size", "Size", 10),
             weight("netWeightGrams", "Net Weight (g)", true),
+            text("bulk", "Bulk", 7),
+            // Totalled, because what is left is the figure a stock-take is checked
+            // against; for a single article it is its own weight or nothing.
+            weight("remainingWeightGrams", "Remaining (g)", true),
             text("status", "Status", 10),
             text("active", "Active", 7),
             text("invoiceNumber", "Sold On Invoice", 18),
@@ -45,7 +49,8 @@ public class ReportDefinitions {
 
     private static final String STOCK_SQL = """
             SELECT i.serial_number, i.created_at, it.name, p.name, c.name, sc.name, h.hsn_code, h.gst_percentage,
-                   i.size, i.weight_grams, i.status, CASE WHEN i.active THEN 'Yes' ELSE 'No' END,
+                   i.size, i.weight_grams, CASE WHEN i.bulk THEN 'Yes' ELSE 'No' END,
+                   i.remaining_weight_grams, i.status, CASE WHEN i.active THEN 'Yes' ELSE 'No' END,
                    s.invoice_number, s.invoice_date
             FROM inventory_items i
             JOIN item_types it ON it.id = i.item_type_id

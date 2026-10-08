@@ -190,7 +190,7 @@ import { InventoryService } from './inventory.service';
                 </div>
                 <div class="field">
                   <label class="field__label field__label--required" for="weightGrams">
-                    Weight (grams)
+                    {{ form.controls.bulk.value ? 'Total weight of the box (grams)' : 'Weight (grams)' }}
                   </label>
                   <input
                     id="weightGrams"
@@ -201,8 +201,32 @@ import { InventoryService } from './inventory.service';
                     formControlName="weightGrams"
                     [class.input--invalid]="invalid('weightGrams')"
                   />
-                  <p class="field__hint">Gross weight, to the milligram.</p>
+                  <p class="field__hint">
+                    {{
+                      form.controls.bulk.value
+                        ? 'Weigh the whole box. Each sale takes its grams off this.'
+                        : 'Gross weight, to the milligram.'
+                    }}
+                  </p>
                   <app-field-error [control]="form.controls.weightGrams" label="Weight" />
+                </div>
+
+                <div class="field field--full">
+                  <label class="checkbox">
+                    <input type="checkbox" formControlName="bulk" />
+                    <span>Bulk item - a box sold by weight, not a single piece</span>
+                  </label>
+                  <p class="field__hint">
+                    For metti and the like: one box of a hundred-odd identical pieces, one tag, one
+                    serial number. The counter weighs out what a customer takes and the box stays in
+                    stock until its last gram is sold.
+                  </p>
+                  @if (weightLocked()) {
+                    <p class="field__hint text-warning">
+                      Part of this box has been sold, so its weight and this setting can no longer be
+                      changed. {{ remaining() }} g of {{ form.controls.weightGrams.value }} g is left.
+                    </p>
+                  }
                 </div>
 
                 <div class="field field--full">
@@ -273,6 +297,16 @@ export class ItemFormComponent implements OnInit {
   protected readonly categories = signal<Lookup[]>([]);
   protected readonly subCategories = signal<Lookup[]>([]);
   protected readonly hsnCodes = signal<Lookup[]>([]);
+  /**
+   * Grams still unsold on the piece being edited, and whether any have gone.
+   *
+   * <p>Once part of a box has been billed, its weight and its bulk flag are
+   * history - an invoice was priced against them. The server refuses the change
+   * either way; disabling the two controls is so the refusal is never a
+   * surprise.
+   */
+  protected readonly remaining = signal<number | null>(null);
+  protected readonly weightLocked = signal(false);
 
   protected readonly form = this.formBuilder.group({
     // Shown, never typed: the server issues it on save. Kept in the form so
@@ -284,6 +318,7 @@ export class ItemFormComponent implements OnInit {
     subCategoryId: this.formBuilder.control<number | null>(null),
     hsnId: this.formBuilder.control<number | null>(null),
     size: this.formBuilder.nonNullable.control('', Validators.maxLength(50)),
+    bulk: this.formBuilder.nonNullable.control(false),
     weightGrams: this.formBuilder.control<number | null>(null, [
       Validators.required,
       Validators.min(0.001),
@@ -392,12 +427,21 @@ export class ItemFormComponent implements OnInit {
             categoryId: item.categoryId,
             size: item.size ?? '',
             weightGrams: item.weightGrams,
+            bulk: item.bulk,
             description: item.description ?? '',
             active: item.active,
             hsnId: item.hsnId ?? null,
           },
           { emitEvent: false },
         );
+
+        this.remaining.set(item.remainingWeightGrams);
+        const partlySold = item.remainingWeightGrams < item.weightGrams;
+        this.weightLocked.set(partlySold);
+        if (partlySold) {
+          this.form.controls.weightGrams.disable({ emitEvent: false });
+          this.form.controls.bulk.disable({ emitEvent: false });
+        }
 
         this.loadPurities(item.itemTypeId, item.purityId);
         this.loadSubCategories(item.categoryId, item.subCategoryId ?? null);
@@ -447,6 +491,7 @@ export class ItemFormComponent implements OnInit {
       subCategoryId: value.subCategoryId,
       hsnId: value.hsnId,
       size: value.size.trim() || null,
+      bulk: value.bulk,
       weightGrams: value.weightGrams,
       description: value.description.trim() || null,
       active: value.active,

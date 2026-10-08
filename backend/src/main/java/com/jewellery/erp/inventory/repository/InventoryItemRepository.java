@@ -77,12 +77,16 @@ public interface InventoryItemRepository
     int findHighestSerialNumber();
 
     /**
-     * Total net weight of the stock still in the shop (active and unsold), in grams.
+     * Total weight of the stock still in the shop (active and unsold), in grams.
+     *
+     * <p>The remaining weight, not the weight that arrived: a bulk box half sold
+     * holds half a box, and the dashboard figure is what is on the shelf today.
+     * For a single article the two are the same.
      *
      * <p>Returns null when there is no stock at all; the service substitutes zero.
      * Leaving the coalesce to Java rather than to JPQL keeps the return type
      * unambiguously BigDecimal whatever the dialect decides a literal 0 is.
      */
-    @Query("select sum(i.weightGrams) from InventoryItem i where i.active = true and i.status = com.jewellery.erp.inventory.entity.InventoryStatus.AVAILABLE")
-    BigDecimal sumActiveWeightGrams();
+    @Query("select sum(i.remainingWeightGrams) from InventoryItem i where i.active = true and i.status = com.jewellery.erp.inventory.entity.InventoryStatus.AVAILABLE")
+    BigDecimal sumRemainingWeightGrams();
 }

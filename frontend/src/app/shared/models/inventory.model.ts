@@ -17,7 +17,15 @@ export interface InventoryItem extends Audited {
   hsnCode?: string | null;
   gstPercentage?: number | null;
   size?: string | null;
+  /** The whole piece, or the whole box when bulk. */
   weightGrams: number;
+  /**
+   * A box sold by weight - metti and the like - rather than one article. One
+   * serial, one tag, and a weight that comes down invoice by invoice.
+   */
+  bulk: boolean;
+  /** Grams still unsold. Equal to weightGrams for an untouched piece. */
+  remainingWeightGrams: number;
   description?: string | null;
   active: boolean;
   /** AVAILABLE until invoiced, then SOLD. Set only by sales. */
@@ -34,6 +42,7 @@ export interface InventoryItemRequest {
   subCategoryId?: number | null;
   hsnId?: number | null;
   size?: string | null;
+  bulk?: boolean;
   weightGrams: number | null;
   description?: string | null;
   active?: boolean;

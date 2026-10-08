@@ -180,13 +180,23 @@ import { InventoryService } from './inventory.service';
                   <td>{{ item.categoryName }}</td>
                   <td>{{ item.subCategoryName || '-' }}</td>
                   <td>{{ item.size || '-' }}</td>
-                  <td class="td--numeric">{{ item.weightGrams | weight }}</td>
-                  <td>
-                    @if (item.status === 'SOLD') {
-                      <span class="badge badge--info">Sold</span>
-                    } @else {
-                      <app-status-badge [active]="item.active" activeLabel="In stock" />
+                  <td class="td--numeric">
+                    {{ item.weightGrams | weight }}
+                    @if (item.bulk && item.remainingWeightGrams < item.weightGrams) {
+                      <span class="remaining">{{ item.remainingWeightGrams | weight }} left</span>
                     }
+                  </td>
+                  <td>
+                    <span class="badges">
+                      @if (item.status === 'SOLD') {
+                        <span class="badge badge--info">Sold</span>
+                      } @else {
+                        <app-status-badge [active]="item.active" activeLabel="In stock" />
+                      }
+                      @if (item.bulk) {
+                        <span class="badge">Bulk</span>
+                      }
+                    </span>
                   </td>
                   <td class="td--actions">
                     <div class="row row--end">
@@ -232,6 +242,21 @@ import { InventoryService } from './inventory.service';
       .serial {
         font-family: var(--font-mono);
         letter-spacing: 0.06em;
+      }
+
+      /* Two badges can share the cell - "In stock" and "Bulk". */
+      .badges {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: var(--space-1);
+        align-items: center;
+      }
+
+      /* What is left of a part-sold box, under its full weight. */
+      .remaining {
+        display: block;
+        font-size: var(--text-xs);
+        color: var(--text-muted);
       }
     `,
   ],

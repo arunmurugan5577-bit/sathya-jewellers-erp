@@ -115,9 +115,20 @@ import { InventoryService } from './inventory.service';
                 <dd>{{ record.size || '-' }}</dd>
               </div>
               <div class="details__row">
-                <dt>Weight</dt>
+                <dt>{{ record.bulk ? 'Weight of the box' : 'Weight' }}</dt>
                 <dd class="numeric">{{ record.weightGrams | weight }}</dd>
               </div>
+              @if (record.bulk) {
+                <div class="details__row">
+                  <dt>Still in the box</dt>
+                  <dd class="numeric">
+                    {{ record.remainingWeightGrams | weight }}
+                    @if (record.remainingWeightGrams < record.weightGrams) {
+                      &middot; {{ record.weightGrams - record.remainingWeightGrams | weight }} sold
+                    }
+                  </dd>
+                </div>
+              }
               <div class="details__row">
                 <dt>HSN / GST</dt>
                 <dd>

@@ -163,7 +163,7 @@ Because the tables already exist, start the backend **once** with a Flyway
 baseline so it does not try to re-create them:
 
 ```bash
-mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=24"
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=25"
 ```
 
 **This file is for development only.** It is the deliberate exception to the

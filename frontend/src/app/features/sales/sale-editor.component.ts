@@ -42,6 +42,8 @@ interface Row {
   lookupError: string | null;
   looking: boolean;
   particulars: string;
+  /** Only used for a bulk box: the grams the counter weighed out. */
+  weight: string;
   wastage: string;
   rate: string;
   making: string;
@@ -80,6 +82,11 @@ function toNumber(value: string): number | null {
  * what the paper receipt has them write by hand - wastage %, rate, making charge,
  * discount - and every figure is priced by the server (POST /sales/calculate) as
  * they type. Nothing on this screen does billing arithmetic itself.
+ *
+ * A bulk box - metti and the like - is the one piece whose weight is not read
+ * from the tag: the customer takes four out of a hundred, the shop weighs what
+ * they took, and that is typed here. The box keeps its serial and stays on the
+ * invoice list until the last gram of it has been sold.
  */
 @Component({
   selector: 'app-sale-editor',
@@ -183,9 +190,22 @@ function toNumber(value: string): number | null {
                       <span><b>Sub category</b> {{ item.subCategoryName || '-' }}</span>
                       <span><b>Type</b> {{ item.itemTypeName }} {{ item.purityName }}</span>
                       <span><b>HSN</b> {{ item.hsnCode }} ({{ item.gstPercentage }}% GST)</span>
-                      <span><b>Net wt</b> {{ item.netWeightGrams | weight }}</span>
+                      @if (item.bulk) {
+                        <span class="facts__bulk"><b>Bulk</b> {{ item.netWeightGrams | weight }} left in the box</span>
+                      } @else {
+                        <span><b>Net wt</b> {{ item.netWeightGrams | weight }}</span>
+                      }
                     </div>
                     <div class="inputs">
+                      @if (item.bulk) {
+                        <div class="field">
+                          <label class="field__label field__label--required" [for]="'g' + row.key">Weight sold (g)</label>
+                          <input class="input numeric" [id]="'g' + row.key" type="number" min="0.001" step="0.001"
+                                 [max]="item.netWeightGrams" [value]="row.weight"
+                                 [class.input--invalid]="overWeight(row)"
+                                 (input)="patch(i, { weight: $any($event.target).value })" />
+                        </div>
+                      }
                       <div class="field">
                         <label class="field__label" [for]="'w' + row.key">Wastage %</label>
                         <input class="input numeric" [id]="'w' + row.key" type="number" min="0" max="100" step="0.01"
@@ -207,6 +227,13 @@ function toNumber(value: string): number | null {
                         <div class="figure-cell figure-cell--amount"><span class="field__label">Amount</span>{{ line.amount | inr: 'whole' }}</div>
                       }
                     </div>
+                    @if (overWeight(row)) {
+                      <p class="field__error">
+                        Only {{ item.netWeightGrams | weight }} is left in this box.
+                      </p>
+                    } @else if (item.bulk && !row.weight.trim()) {
+                      <p class="field__hint">Weigh what the customer is taking and enter it above.</p>
+                    }
                   }
                 </div>
               }
@@ -369,6 +396,8 @@ function toNumber(value: string): number | null {
       .particulars-field { flex: 1; min-width: 12rem; }
       .facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); font-size: var(--text-sm); color: var(--text-secondary); }
       .facts b { color: var(--text-muted); font-weight: 500; margin-right: var(--space-1); }
+      /* A box is the one line whose weight the counter has to supply, so say so. */
+      .facts__bulk { color: var(--text-primary); font-weight: 600; }
       .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: var(--space-3); align-items: end; }
       .figure-cell { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; padding-bottom: var(--space-2); }
       .figure-cell--amount { font-weight: 700; font-size: var(--text-md); }
@@ -445,8 +474,32 @@ export class SaleEditorComponent {
   );
 
   private readonly readyRows = computed(() =>
-    this.rows().filter((row) => row.lookup && (toNumber(row.rate) ?? 0) > 0),
+    this.rows().filter(
+      (row) => row.lookup && (toNumber(row.rate) ?? 0) > 0 && this.weightSettled(row),
+    ),
   );
+
+  /**
+   * Whether a row's weight is known.
+   *
+   * <p>A single piece weighs what its tag says. A bulk box weighs whatever the
+   * counter put on the scale, so until that is typed the line cannot be priced -
+   * and asking for more than the box holds is refused here as well as by the
+   * server, so the invoice is not sent only to bounce.
+   */
+  private weightSettled(row: Row): boolean {
+    if (!row.lookup?.bulk) {
+      return true;
+    }
+    const grams = toNumber(row.weight) ?? 0;
+    return grams > 0 && grams <= row.lookup.netWeightGrams;
+  }
+
+  /** More grams asked of a box than are left in it - shown on the row as it is typed. */
+  protected overWeight(row: Row): boolean {
+    const grams = toNumber(row.weight) ?? 0;
+    return !!row.lookup?.bulk && grams > row.lookup.netWeightGrams;
+  }
 
   constructor() {
     this.recalc$
@@ -597,7 +650,11 @@ export class SaleEditorComponent {
         this.scanning.set(false);
         this.scanValue.set('');
         this.scanError.set(null);
-        this.scanStatus.set(`Added ${item.serialNumber} - ${item.suggestedParticulars || item.categoryName}`);
+        this.scanStatus.set(
+          item.bulk
+            ? `Added ${item.serialNumber} - bulk. Enter the weight being sold.`
+            : `Added ${item.serialNumber} - ${item.suggestedParticulars || item.categoryName}`,
+        );
         this.focusScanBox();
         this.schedule();
       },
@@ -781,6 +838,9 @@ export class SaleEditorComponent {
       items: this.readyRows().map((row) => ({
         serialNumber: row.lookup!.serialNumber,
         particulars: row.particulars.trim() || null,
+        // Sent only for a box. A single piece is sold whole and the server
+        // refuses a weight for it rather than quietly ignoring one.
+        weightGrams: row.lookup!.bulk ? toNumber(row.weight) : null,
         wastagePercentage: toNumber(row.wastage),
         ratePerGram: toNumber(row.rate),
         makingCharge: toNumber(row.making),
@@ -808,6 +868,7 @@ export class SaleEditorComponent {
       lookupError: null,
       looking: false,
       particulars: '',
+      weight: '',
       wastage: '',
       rate: '',
       making: '',

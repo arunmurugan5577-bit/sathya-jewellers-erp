@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -102,7 +103,9 @@ public class WholesaleService {
                 jewelNameOf(item),
                 item.getItemType().getName(),
                 item.getPurity().getName(),
-                item.getWeightGrams(),
+                // What is still there, not what arrived: a bulk box half sold at
+                // the counter has half a box left to send to a dealer.
+                item.getRemainingWeightGrams(),
                 suggestedTouch(item));
     }
 
@@ -188,7 +191,12 @@ public class WholesaleService {
             estimate.addItem(buildLine(priced.lines().get(i), pieces.get(i)));
         }
 
-        inventoryItemService.markSold(pieces);
+        // Each piece goes out whole, so what it gives is what it had left.
+        List<InventoryItemService.Billed> billed = new ArrayList<>(pieces.size());
+        for (InventoryItem piece : pieces) {
+            billed.add(new InventoryItemService.Billed(piece, piece.getRemainingWeightGrams()));
+        }
+        inventoryItemService.billOut(billed);
         balance.add(priced.totals().totalPureGrams(), priced.totals().totalMiscAmount());
         balance.setUpdatedBy(SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER));
 
@@ -218,15 +226,16 @@ public class WholesaleService {
         }
 
         WholesaleEstimate detailed = requireDetailed(id);
-        List<Long> inventoryIds = new ArrayList<>();
+        // The weight each line took, so a bulk box gets back exactly what it gave.
+        Map<Long, BigDecimal> returning = new LinkedHashMap<>();
         for (WholesaleEstimateItem line : detailed.getItems()) {
             if (line.getLineStatus() == WholesaleItemStatus.ACTIVE) {
                 line.setLineStatus(WholesaleItemStatus.CANCELLED);
-                inventoryIds.add(line.getInventoryItem().getId());
+                returning.merge(line.getInventoryItem().getId(), line.getJewelWeightGrams(), BigDecimal::add);
             }
         }
-        if (!inventoryIds.isEmpty()) {
-            inventoryItemService.returnToStock(inventoryIds);
+        if (!returning.isEmpty()) {
+            inventoryItemService.returnToStock(returning);
         }
 
         // Reverse exactly what this estimate added, not a recomputation: the
@@ -242,7 +251,7 @@ public class WholesaleService {
         detailed.setCancelledAt(Instant.now());
         repository.flush();
         log.info("Wholesale estimate {} cancelled: {} piece(s) returned to stock, {} g pure reversed",
-                detailed.getEstimateNumber(), inventoryIds.size(), detailed.getTotalPureGrams());
+                detailed.getEstimateNumber(), returning.size(), detailed.getTotalPureGrams());
         return mapper.toDetail(requireDetailed(id), shopSettingsService.find());
     }
 
@@ -286,7 +295,10 @@ public class WholesaleService {
             WholesaleDtos.ItemRequest line = requested.get(i);
             InventoryItem piece = pieces.get(i);
 
-            BigDecimal jewelWeight = piece.getWeightGrams();
+            // A wholesale estimate moves the piece entire - there is no part-box
+            // on this form, unlike the retail counter - so the line weighs
+            // whatever is left of it. For a single article that is its own weight.
+            BigDecimal jewelWeight = piece.getRemainingWeightGrams();
             BigDecimal touch = line.purePercentage();
             BigDecimal pureWeight = calculator.pureWeight(jewelWeight, touch);
             // The line may quote its own rate; most do not and take the day's.

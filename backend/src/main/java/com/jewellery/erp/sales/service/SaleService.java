@@ -58,6 +58,13 @@ import org.springframework.transaction.annotation.Transactional;
  * number is held for the shortest possible time. Cancellation locks the invoice
  * first; nothing that creates a sale ever locks an existing invoice, so the two
  * orders cannot cross.
+ *
+ * <p>Most lines bill one whole piece. A bulk box - metti and the like, sold by
+ * the gram - bills whatever the counter weighed out, and the box stays on sale
+ * until its last gram goes. The weight a line takes is settled once, by
+ * {@link InventoryItemService#assertBillable}, and that same figure is what the
+ * line is priced on, what comes off the box, and what goes back if the invoice
+ * is cancelled.
  */
 @Service
 @Transactional(readOnly = true)
@@ -125,6 +132,7 @@ public class SaleService {
             pieces.add(inventoryItemService.requireSellable(line.serialNumber()));
         }
         assertNoDuplicates(pieces);
+        List<BigDecimal> weights = billedWeights(request, pieces);
 
         BigDecimal adjustment = sumAdjustments(request);
         if (adjustment.signum() > 0) {
@@ -137,7 +145,7 @@ public class SaleService {
         }
 
         SaleCalculator.Result result = calculator.calculate(
-                toInputs(request, pieces), request.discountAmount(), adjustment, sumPayments(request));
+                toInputs(request, pieces, weights), request.discountAmount(), adjustment, sumPayments(request));
 
         List<SaleDtos.Line> lines = new ArrayList<>();
         for (int i = 0; i < pieces.size(); i++) {
@@ -168,6 +176,9 @@ public class SaleService {
         }
         Map<String, InventoryItem> locked = inventoryItemService.lockSellable(serials);
         List<InventoryItem> pieces = serials.stream().map(locked::get).toList();
+        // Settled under the lock: a bulk box another counter has just drawn from
+        // may no longer hold what this invoice is asking of it.
+        List<BigDecimal> weights = billedWeights(request, pieces);
 
         // Lock 2: the old gold / silver bills, checked against their locked balance.
         Map<Long, OldMetalTransaction> bills = request.adjustmentsOrEmpty().isEmpty()
@@ -176,7 +187,8 @@ public class SaleService {
         assertAdjustmentsValid(request, bills, customer.getId());
 
         SaleCalculator.Result result = calculator.calculate(
-                toInputs(request, pieces), request.discountAmount(), sumAdjustments(request), sumPayments(request));
+                toInputs(request, pieces, weights), request.discountAmount(),
+                sumAdjustments(request), sumPayments(request));
 
         Sale sale = new Sale();
         sale.setCustomer(customer);
@@ -203,7 +215,11 @@ public class SaleService {
         for (SaleRequests.Payment requested : request.paymentsOrEmpty()) {
             sale.addPayment(buildPayment(requested, invoiceDate));
         }
-        inventoryItemService.markSold(pieces);
+        List<InventoryItemService.Billed> billed = new ArrayList<>(pieces.size());
+        for (int i = 0; i < pieces.size(); i++) {
+            billed.add(new InventoryItemService.Billed(pieces.get(i), weights.get(i)));
+        }
+        inventoryItemService.billOut(billed);
 
         // Lock 3, last: the invoice counter.
         sale.setInvoiceNumber(documentNumberService.next(DocumentSeries.SALE_INVOICE, invoiceDate));
@@ -212,6 +228,13 @@ public class SaleService {
         log.info("Sale {} completed for customer {}: {} item(s), grand total {}, payable {}",
                 saved.getInvoiceNumber(), customer.getCustomerCode(), pieces.size(),
                 saved.getGrandTotal(), saved.getNetPayable());
+        for (int i = 0; i < pieces.size(); i++) {
+            InventoryItem piece = pieces.get(i);
+            if (piece.isBulk()) {
+                log.info("  bulk {}: {}g billed, {}g left",
+                        piece.getSerialNumber(), weights.get(i), piece.getRemainingWeightGrams());
+            }
+        }
         return mapper.toDetail(requireDetailed(saved.getId()));
     }
 
@@ -261,11 +284,15 @@ public class SaleService {
                     "Invoice %s is already cancelled.".formatted(sale.getInvoiceNumber()));
         }
 
-        List<Long> inventoryIds = new ArrayList<>();
+        // The weight each line took, so a bulk box gets back exactly what it gave.
+        // A single piece is restored whole whatever is passed, so the sum is only
+        // ever read for boxes - but merging keeps it right if a box ever appears
+        // on two lines of one invoice.
+        Map<Long, BigDecimal> returning = new LinkedHashMap<>();
         for (SaleItem line : sale.getItems()) {
             if (line.getLineStatus() == SaleItemStatus.ACTIVE) {
                 line.setLineStatus(SaleItemStatus.CANCELLED);
-                inventoryIds.add(line.getInventoryItem().getId());
+                returning.merge(line.getInventoryItem().getId(), line.getNetWeightGrams(), BigDecimal::add);
             }
         }
         Map<Long, BigDecimal> released = new LinkedHashMap<>();
@@ -277,8 +304,8 @@ public class SaleService {
             }
         }
 
-        if (!inventoryIds.isEmpty()) {
-            inventoryItemService.returnToStock(inventoryIds);
+        if (!returning.isEmpty()) {
+            inventoryItemService.returnToStock(returning);
         }
         if (!released.isEmpty()) {
             oldMetalService.releaseUsage(released);
@@ -289,7 +316,7 @@ public class SaleService {
         sale.setCancelledBy(SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER));
         sale.setCancelledAt(Instant.now());
         repository.flush();
-        log.info("Sale {} cancelled: {} piece(s) returned to stock", sale.getInvoiceNumber(), inventoryIds.size());
+        log.info("Sale {} cancelled: {} piece(s) returned to stock", sale.getInvoiceNumber(), returning.size());
         return mapper.toDetail(requireDetailed(id));
     }
 
@@ -324,13 +351,30 @@ public class SaleService {
         }
     }
 
-    private List<SaleCalculator.LineInput> toInputs(SaleRequests.Sale request, List<InventoryItem> pieces) {
+    /**
+     * How much weight each line takes off its piece.
+     *
+     * <p>A whole piece for an ordinary article; for a bulk box, what the counter
+     * weighed out, checked against what is left. Worked out once per request and
+     * then used everywhere - pricing, the stock movement and the figure stored on
+     * the line - so those three can never disagree.
+     */
+    private List<BigDecimal> billedWeights(SaleRequests.Sale request, List<InventoryItem> pieces) {
+        List<BigDecimal> weights = new ArrayList<>(pieces.size());
+        for (int i = 0; i < pieces.size(); i++) {
+            weights.add(inventoryItemService.assertBillable(pieces.get(i), request.items().get(i).weightGrams()));
+        }
+        return weights;
+    }
+
+    private List<SaleCalculator.LineInput> toInputs(
+            SaleRequests.Sale request, List<InventoryItem> pieces, List<BigDecimal> weights) {
         List<SaleCalculator.LineInput> inputs = new ArrayList<>(pieces.size());
         for (int i = 0; i < pieces.size(); i++) {
             SaleRequests.Item line = request.items().get(i);
             InventoryItem piece = pieces.get(i);
             inputs.add(new SaleCalculator.LineInput(
-                    piece.getWeightGrams(),
+                    weights.get(i),
                     line.wastagePercentage(),
                     line.ratePerGram(),
                     line.makingCharge(),
@@ -346,6 +390,7 @@ public class SaleService {
         line.setInventoryItem(piece);
         line.setLineStatus(SaleItemStatus.ACTIVE);
         line.setSerialNumber(piece.getSerialNumber());
+        line.setBulk(piece.isBulk());
         line.setParticulars(particulars(requested, piece));
         line.setHsnCode(piece.getHsnCode().getHsnCode());
         line.setGstPercentage(r.gstPercentage());

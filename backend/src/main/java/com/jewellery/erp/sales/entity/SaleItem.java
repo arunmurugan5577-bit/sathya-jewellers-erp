@@ -56,6 +56,17 @@ public class SaleItem extends AuditableEntity {
     @Column(name = "serial_number", nullable = false, length = 6, updatable = false)
     private String serialNumber;
 
+    /**
+     * Whether this line sold weight out of a box rather than one whole article.
+     *
+     * <p>A snapshot like the serial number beside it. It is what narrows
+     * {@code uk_sale_items_active_inventory_item} - the index that stops a single
+     * piece being on two live invoices - so that a box, which belongs on as many
+     * live invoices as it has customers, is left out of it.
+     */
+    @Column(name = "bulk", nullable = false, updatable = false)
+    private boolean bulk;
+
     @Column(name = "particulars", nullable = false, length = 200, updatable = false)
     private String particulars;
 

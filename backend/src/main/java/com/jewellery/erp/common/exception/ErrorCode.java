@@ -22,6 +22,8 @@ public enum ErrorCode {
     INVENTORY_ITEM_INACTIVE,
     INVENTORY_ITEM_NOT_BILLABLE,
     ITEM_ALREADY_SOLD,
+    /** More weight was asked of a bulk box than is left in it. */
+    INVENTORY_WEIGHT_EXCEEDED,
 
     OLD_METAL_NOT_FOUND,
     OLD_METAL_ALREADY_USED,

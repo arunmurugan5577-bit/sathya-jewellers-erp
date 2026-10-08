@@ -179,7 +179,7 @@ public class InventoryItemService {
 
     /** Dashboard metrics, gathered in one place so the controller stays thin. */
     public InventorySummary summarise() {
-        BigDecimal activeWeight = inventoryItemRepository.sumActiveWeightGrams();
+        BigDecimal activeWeight = inventoryItemRepository.sumRemainingWeightGrams();
         return new InventorySummary(
                 inventoryItemRepository.count(),
                 // "In stock" now means unsold as well as active.
@@ -204,16 +204,20 @@ public class InventoryItemService {
 
         InventoryItem entity = new InventoryItem();
         entity.setSerialNumber(serialNumber);
+        entity.setBulk(Boolean.TRUE.equals(request.bulk()));
         applyReferences(entity, request);
         applyAttributes(entity, request);
+        // Nothing has been billed yet, so the whole piece - or the whole box - is there.
+        entity.setRemainingWeightGrams(entity.getWeightGrams());
         entity.setActive(request.active() == null || request.active());
 
         InventoryItem saved = inventoryItemRepository.save(entity);
-        log.info("Inventory item {} added ({} {}, {}g)",
+        log.info("Inventory item {} added ({} {}, {}g{})",
                 saved.getSerialNumber(),
                 saved.getPurity().getName(),
                 saved.getItemType().getName(),
-                saved.getWeightGrams());
+                saved.getWeightGrams(),
+                saved.isBulk() ? ", bulk" : "");
         return inventoryItemMapper.toDto(saved);
     }
 
@@ -221,6 +225,10 @@ public class InventoryItemService {
     public InventoryItemDto update(Long id, InventoryItemRequest request) {
         InventoryItem entity = requireItem(id);
         requireNotSold(entity, "edited");
+        requireWeightStillOpen(entity, request);
+        // Read before anything is written: once the new weight is applied, the
+        // two figures match again and the question cannot be asked.
+        boolean partlySold = entity.isPartlySold();
         String serialNumber = normalizeSerial(request.serialNumber());
 
         if (inventoryItemRepository.existsBySerialNumberAndIdNot(serialNumber, id)) {
@@ -229,8 +237,17 @@ public class InventoryItemService {
         }
 
         entity.setSerialNumber(serialNumber);
+        entity.setBulk(Boolean.TRUE.equals(request.bulk()));
         applyReferences(entity, request);
         applyAttributes(entity, request);
+        if (!partlySold) {
+            // Nothing has been billed off this piece, so correcting its weight
+            // corrects what is left of it too. A part-sold box is left alone:
+            // requireWeightStillOpen has already refused any change to its
+            // weight, and the grams it has given out are not this form's to
+            // reinstate - that happens by cancelling the invoice that took them.
+            entity.setRemainingWeightGrams(entity.getWeightGrams());
+        }
         if (request.active() != null) {
             entity.setActive(request.active());
         }
@@ -325,17 +342,72 @@ public class InventoryItemService {
         return locked;
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void markSold(Collection<InventoryItem> items) {
-        items.forEach(item -> item.setStatus(InventoryStatus.SOLD));
+    /**
+     * Checks that a piece can give up the weight an invoice line asks of it, and
+     * answers with the weight that will be billed.
+     *
+     * <p>Separate from taking it, because the preview prices an invoice that is
+     * not being saved and must refuse an over-sale with the same message the save
+     * would give. The piece must already be known sellable.
+     */
+    public BigDecimal assertBillable(InventoryItem item, BigDecimal requestedGrams) {
+        if (!item.isBulk()) {
+            if (requestedGrams != null) {
+                // Ignoring it silently would let a counter believe it had sold 2g
+                // of a 10g ring, when the customer is charged for all 10.
+                throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "items",
+                        ("Serial number %s is a single piece and is sold whole; "
+                                + "a weight cannot be entered for it.").formatted(item.getSerialNumber()));
+            }
+            return item.getWeightGrams();
+        }
+        if (requestedGrams == null) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "items",
+                    "Bulk item %s is sold by weight. Enter the weight being sold."
+                            .formatted(item.getSerialNumber()));
+        }
+        BigDecimal wanted = item.billableWeight(requestedGrams);
+        if (wanted.signum() <= 0) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "items",
+                    "The weight sold from bulk item %s must be more than zero."
+                            .formatted(item.getSerialNumber()));
+        }
+        if (wanted.compareTo(item.getRemainingWeightGrams()) > 0) {
+            throw new StateConflictException(ErrorCode.INVENTORY_WEIGHT_EXCEEDED, "items",
+                    "Only %sg is left in bulk item %s; %sg was asked for."
+                            .formatted(item.getRemainingWeightGrams(), item.getSerialNumber(), wanted));
+        }
+        return wanted;
     }
 
-    /** Puts pieces back on sale after their invoice is cancelled. Locks them first. */
+    /**
+     * Takes the billed weight off each piece.
+     *
+     * <p>A single article empties in one step and becomes SOLD; a bulk box stays
+     * sellable until its last gram goes. The caller holds the locks from
+     * {@link #lockSellable} and has been through {@link #assertBillable}.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void returnToStock(Collection<Long> inventoryItemIds) {
-        inventoryItemRepository.lockAllById(inventoryItemIds)
-                .forEach(item -> item.setStatus(InventoryStatus.AVAILABLE));
+    public void billOut(Collection<Billed> billed) {
+        for (Billed line : billed) {
+            line.piece().billOut(line.weightGrams());
+        }
     }
+
+    /**
+     * Puts weight back on sale after an invoice is cancelled. Locks the pieces first.
+     *
+     * @param weightsByItemId how much each piece gave to the cancelled invoice
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void returnToStock(Map<Long, BigDecimal> weightsByItemId) {
+        for (InventoryItem item : inventoryItemRepository.lockAllById(weightsByItemId.keySet())) {
+            item.returnToStock(weightsByItemId.get(item.getId()));
+        }
+    }
+
+    /** One invoice line's claim on a piece: how much of it is going out. */
+    public record Billed(InventoryItem piece, BigDecimal weightGrams) {}
 
     /** Canonical six-digit form of a serial number, for callers outside this module. */
     public static String canonicalSerial(String raw) {
@@ -345,7 +417,10 @@ public class InventoryItemService {
     private static void assertSellable(InventoryItem item) {
         if (item.getStatus() == InventoryStatus.SOLD) {
             throw new StateConflictException(ErrorCode.ITEM_ALREADY_SOLD, "serialNumber",
-                    "Serial number %s has already been sold.".formatted(item.getSerialNumber()));
+                    item.isBulk()
+                            ? "Bulk item %s is empty - its whole weight has been sold."
+                                    .formatted(item.getSerialNumber())
+                            : "Serial number %s has already been sold.".formatted(item.getSerialNumber()));
         }
         if (!item.isActive()) {
             throw new BusinessRuleException(ErrorCode.INVENTORY_ITEM_INACTIVE, "serialNumber",
@@ -355,6 +430,31 @@ public class InventoryItemService {
             // The HSN code carries the GST rate; without it the tax cannot be computed.
             throw new BusinessRuleException(ErrorCode.INVENTORY_ITEM_NOT_BILLABLE, "serialNumber",
                     "Serial number %s has no HSN code. Set one on the inventory item before billing it."
+                            .formatted(item.getSerialNumber()));
+        }
+    }
+
+    /**
+     * Refuses to rewrite a weight that invoices have already been drawn from.
+     *
+     * <p>Part of a box having gone out makes its weight and its bulk flag
+     * history: an invoice priced 4.100g out of 92.500g, and moving either figure
+     * now would leave the remaining weight describing a box that never existed.
+     * Everything else on the piece stays editable.
+     */
+    private static void requireWeightStillOpen(InventoryItem item, InventoryItemRequest request) {
+        if (!item.isPartlySold()) {
+            return;
+        }
+        if (item.getWeightGrams().compareTo(request.weightGrams()) != 0) {
+            throw new StateConflictException(ErrorCode.ITEM_ALREADY_SOLD, "weightGrams",
+                    ("Part of bulk item %s has been sold (%sg of %sg left), so its weight can no longer "
+                            + "be changed.").formatted(item.getSerialNumber(),
+                            item.getRemainingWeightGrams(), item.getWeightGrams()));
+        }
+        if (Boolean.TRUE.equals(request.bulk()) != item.isBulk()) {
+            throw new StateConflictException(ErrorCode.ITEM_ALREADY_SOLD, "bulk",
+                    "Part of bulk item %s has been sold, so it can no longer be changed to a single piece."
                             .formatted(item.getSerialNumber()));
         }
     }

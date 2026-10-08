@@ -157,7 +157,12 @@ export interface SaleItemLookup {
   subCategoryName?: string | null;
   hsnCode: string;
   gstPercentage: number;
+  /** For a bulk box, what is still in it. */
   netWeightGrams: number;
+  /** A box sold by weight: the counter enters how much is going out. */
+  bulk: boolean;
+  /** Grams still in the box. Null for a single piece. */
+  remainingWeightGrams?: number | null;
   size?: string | null;
   description?: string | null;
   suggestedParticulars: string;
@@ -274,6 +279,8 @@ export interface SaleSummary {
 export interface SaleItemRequest {
   serialNumber: string;
   particulars?: string | null;
+  /** Only for a bulk box: the weight being sold out of it. */
+  weightGrams?: number | null;
   wastagePercentage?: number | null;
   ratePerGram: number | null;
   makingCharge?: number | null;

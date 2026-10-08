@@ -15,6 +15,7 @@ import com.jewellery.erp.category.entity.Category;
 import com.jewellery.erp.category.service.CategoryService;
 import com.jewellery.erp.common.exception.BusinessRuleException;
 import com.jewellery.erp.common.exception.DuplicateResourceException;
+import com.jewellery.erp.common.exception.StateConflictException;
 import com.jewellery.erp.hsn.service.HsnCodeService;
 import com.jewellery.erp.inventory.dto.InventoryItemRequest;
 import com.jewellery.erp.numbering.DocumentNumberService;
@@ -88,7 +89,7 @@ class InventoryItemServiceTest {
 
     private static InventoryItemRequest request(String serialNumber) {
         return new InventoryItemRequest(
-                serialNumber, 1L, 2L, 10L, null, null, "16", new BigDecimal("5.250"), "Plain band", null);
+                serialNumber, 1L, 2L, 10L, null, null, "16", false, new BigDecimal("5.250"), "Plain band", null);
     }
 
     private Purity purity916() {
@@ -226,7 +227,7 @@ class InventoryItemServiceTest {
                             "subCategoryId", "Sub category 'Jhumka' does not belong to the selected category."));
 
             InventoryItemRequest withForeignSubCategory = new InventoryItemRequest(
-                    "000123", 1L, 2L, 10L, 99L, null, "16", new BigDecimal("5.250"), null, null);
+                    "000123", 1L, 2L, 10L, 99L, null, "16", false, new BigDecimal("5.250"), null, null);
 
             assertThatThrownBy(() -> service.create(withForeignSubCategory))
                     .isInstanceOf(BusinessRuleException.class)
@@ -303,6 +304,96 @@ class InventoryItemServiceTest {
             assertThatThrownBy(() -> service.update(5L, request("000999")))
                     .isInstanceOf(DuplicateResourceException.class)
                     .hasMessageContaining("999");
+        }
+
+        /**
+         * A box that has been part sold.
+         *
+         * <p>5.250 g is what {@link #request} asks for, so an edit that leaves the
+         * weight alone is a legal edit of everything else on the piece.
+         */
+        private InventoryItem partSoldBox() {
+            InventoryItem box = new InventoryItem();
+            box.setId(5L);
+            box.setSerialNumber("123");
+            box.setBulk(true);
+            box.setWeightGrams(new BigDecimal("5.250"));
+            box.setRemainingWeightGrams(new BigDecimal("1.150"));
+            return box;
+        }
+
+        @Test
+        @DisplayName("editing a part sold box leaves the weight that is left alone")
+        void editingABoxDoesNotRefillIt() {
+            // The bug this guards: the edit used to reset the remaining weight to
+            // the full weight, so correcting a box's description silently put
+            // back every gram already billed off it, and the invoices that took
+            // them stayed standing.
+            InventoryItem box = partSoldBox();
+            when(inventoryItemRepository.findById(5L)).thenReturn(java.util.Optional.of(box));
+            when(inventoryItemRepository.existsBySerialNumberAndIdNot("123", 5L)).thenReturn(false);
+            stubValidReferences();
+
+            InventoryItemRequest sameWeight = new InventoryItemRequest(
+                    "000123", 1L, 2L, 10L, null, null, "16", true,
+                    new BigDecimal("5.250"), "Metti box, second tray", null);
+
+            service.update(5L, sameWeight);
+
+            assertThat(box.getRemainingWeightGrams()).isEqualByComparingTo("1.150");
+            assertThat(box.getDescription()).isEqualTo("Metti box, second tray");
+        }
+
+        @Test
+        @DisplayName("an untouched piece takes its new weight through to what is left")
+        void reweighingAnUntouchedPieceIsApplied() {
+            InventoryItem box = new InventoryItem();
+            box.setId(5L);
+            box.setSerialNumber("123");
+            box.setBulk(true);
+            box.setWeightGrams(new BigDecimal("4.000"));
+            box.setRemainingWeightGrams(new BigDecimal("4.000"));
+
+            when(inventoryItemRepository.findById(5L)).thenReturn(java.util.Optional.of(box));
+            when(inventoryItemRepository.existsBySerialNumberAndIdNot("123", 5L)).thenReturn(false);
+            stubValidReferences();
+
+            // Nothing has been billed off it, so a mis-keyed weight is simply a
+            // correction and the whole box is still there to be sold.
+            service.update(5L, new InventoryItemRequest(
+                    "000123", 1L, 2L, 10L, null, null, "16", true,
+                    new BigDecimal("5.250"), null, null));
+
+            assertThat(box.getWeightGrams()).isEqualByComparingTo("5.250");
+            assertThat(box.getRemainingWeightGrams()).isEqualByComparingTo("5.250");
+        }
+
+        @Test
+        @DisplayName("reweighing a part sold box is refused outright")
+        void refusesToReweighAPartSoldBox() {
+            InventoryItem box = partSoldBox();
+            when(inventoryItemRepository.findById(5L)).thenReturn(java.util.Optional.of(box));
+            stubValidReferences();
+
+            assertThatThrownBy(() -> service.update(5L, new InventoryItemRequest(
+                    "000123", 1L, 2L, 10L, null, null, "16", true,
+                    new BigDecimal("9.000"), null, null)))
+                    .isInstanceOf(StateConflictException.class)
+                    .hasMessageContaining("1.150")
+                    .hasMessageContaining("5.250");
+            assertThat(box.getWeightGrams()).isEqualByComparingTo("5.250");
+        }
+
+        @Test
+        @DisplayName("turning a part sold box into a single piece is refused")
+        void refusesToUnbulkAPartSoldBox() {
+            InventoryItem box = partSoldBox();
+            when(inventoryItemRepository.findById(5L)).thenReturn(java.util.Optional.of(box));
+            stubValidReferences();
+
+            assertThatThrownBy(() -> service.update(5L, request("000123")))
+                    .isInstanceOf(StateConflictException.class)
+                    .hasMessageContaining("single piece");
         }
     }
 }

@@ -51,7 +51,12 @@ public record InventoryItemRequest(
         @Size(max = 50, message = "Size must not exceed 50 characters")
         String size,
 
-        @Schema(example = "5.250", description = "Gross weight in grams, up to 3 decimal places")
+        @Schema(example = "false",
+                description = "True for a box sold by weight (metti and the like) rather than one article")
+        Boolean bulk,
+
+        @Schema(example = "5.250",
+                description = "Gross weight in grams, up to 3 decimal places. The whole box, when bulk.")
         @NotNull(message = "Weight is required")
         @DecimalMin(value = "0.001", message = "Weight must be greater than zero")
         @DecimalMax(value = "999999999.999", message = "Weight is out of range")

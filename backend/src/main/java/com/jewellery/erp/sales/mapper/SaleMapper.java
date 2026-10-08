@@ -26,7 +26,10 @@ public class SaleMapper {
                 item.getSubCategory() == null ? null : item.getSubCategory().getName(),
                 item.getHsnCode().getHsnCode(),
                 item.getHsnCode().getGstPercentage(),
-                item.getWeightGrams(),
+                // A box offers what is left in it, not what arrived in it.
+                item.isBulk() ? item.getRemainingWeightGrams() : item.getWeightGrams(),
+                item.isBulk(),
+                item.isBulk() ? item.getRemainingWeightGrams() : null,
                 item.getSize(),
                 item.getDescription(),
                 defaultParticulars(item));
