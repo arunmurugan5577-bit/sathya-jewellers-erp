@@ -74,6 +74,17 @@ public class LabelPrinterService {
                 .toList();
     }
 
+    /**
+     * Whether the machine running the application has any printer at all.
+     *
+     * <p>False on a hosted server, which is the whole reason the print agent
+     * exists: a data centre has no printers and no route to the one on the
+     * shop's USB cable.
+     */
+    public boolean hasAnyPrinter() {
+        return PrintServiceLookup.lookupPrintServices(null, null).length > 0;
+    }
+
     public String defaultPrinter() {
         PrintService service = PrintServiceLookup.lookupDefaultPrintService();
         return service == null ? null : service.getName();

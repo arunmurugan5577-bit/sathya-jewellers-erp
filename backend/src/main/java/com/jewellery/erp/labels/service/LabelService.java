@@ -162,6 +162,26 @@ public class LabelService {
     }
 
     /**
+     * Whether pages go to the shop's agent rather than to this machine.
+     *
+     * <p>The setting says so, or the machine leaves no choice. DIRECT means
+     * "the printer is attached to the computer running the application", and on
+     * a hosted server that is not a preference that can be honoured - there are
+     * no printers there and never will be. Treating it as a choice produced the
+     * one error a shop cannot act on: "No printer is set up. Choose the label
+     * printer in label settings", on a settings screen whose printer list is
+     * necessarily empty. So an application that finds itself with no printers at
+     * all stops pretending it can spool and hands the page to the agent, which
+     * is the only thing in the system that can reach a tag.
+     *
+     * <p>A counter PC running the application itself is untouched: it has
+     * printers, so DIRECT stays DIRECT.
+     */
+    private boolean printsThroughAgent(LabelSettings settings) {
+        return settings.getPrintMode() == PrintMode.AGENT || !printerService.hasAnyPrinter();
+    }
+
+    /**
      * Printers the labels can actually go to.
      *
      * <p>Hosted, that is whatever the shop's agent last reported - the server's
@@ -169,7 +189,7 @@ public class LabelService {
      */
     public LabelDtos.Printers printers() {
         LabelSettings settings = requireSettings();
-        if (settings.getPrintMode() == PrintMode.AGENT) {
+        if (printsThroughAgent(settings)) {
             LabelDtos.AgentStatus agent = queueService.status();
             return new LabelDtos.Printers(agent.printers(), agent.defaultPrinter(), settings.getPrinterName());
         }
@@ -196,15 +216,22 @@ public class LabelService {
         List<LabelDtos.Label> labels = requireLabels(request, settings);
         Long jobId = recordPrint(labels);
 
-        if (settings.getPrintMode() == PrintMode.AGENT) {
+        if (printsThroughAgent(settings)) {
             // Refused rather than queued: pages piling up for an agent that is
             // not running looks like a printer fault to whoever is at the
             // counter, and they would keep pressing Print.
             LabelDtos.AgentStatus agent = queueService.status();
             if (!agent.online()) {
                 throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "printerName",
-                        "The print agent on the shop computer is not running, so nothing can be printed. "
-                                + "Start it on the counter PC and try again.");
+                        settings.getPrintMode() == PrintMode.AGENT
+                                ? "The print agent on the shop computer is not running, so nothing can be "
+                                        + "printed. Start it on the counter PC and try again."
+                                // Says what is wrong with the installation, not
+                                // what is wrong with the settings. There is no
+                                // printer to choose here and there cannot be.
+                                : "This server has no printers of its own, so labels have to print at the "
+                                        + "shop through the print agent. Start it on the counter PC "
+                                        + "(tools/print-agent) and try again.");
             }
             int pages = queueService.enqueue(jobId, labels, settings);
             String printer = settings.getPrinterName() == null || settings.getPrinterName().isBlank()
