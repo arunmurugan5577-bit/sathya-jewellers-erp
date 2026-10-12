@@ -83,10 +83,20 @@ public class LabelDocumentBuilder {
                   color: #000;
                 }
                 .row:last-child { page-break-after: auto; break-after: auto; }
+                /*
+                 * The ink's coordinate frame, not a window onto it.
+                 *
+                 * A negative left margin puts artwork at a negative x - that is
+                 * the whole point of it, and the page was grown leftward to hold
+                 * it. The printer clips at the edge of the paper and nowhere
+                 * else, so neither does this: clipping here threw away exactly
+                 * the artwork the lead-in exists to keep, and the preview lost a
+                 * shop mark and the first bars of a barcode that print perfectly
+                 * well. The page still clips, on .row.
+                 */
                 .cell {
                   position: relative;
                   width: %s; height: %s;
-                  overflow: hidden;
                 }
                 .cell > .inner {
                   position: absolute; inset: 0;
@@ -108,20 +118,37 @@ public class LabelDocumentBuilder {
                         mm(settings.getOffsetXMm()), mm(settings.getOffsetYMm()), settings.getRotationDegrees(),
                         mm(settings.getLabelWidthMm().divide(BigDecimal.valueOf(2), 3, RoundingMode.HALF_UP)),
                         mm(settings.getContentHeightMm().divide(BigDecimal.valueOf(2), 3, RoundingMode.HALF_UP)),
-                        screenPreview ? PREVIEW_CSS : "",
+                        screenPreview ? previewCss(lead, settings) : "",
                         rows);
     }
 
     /**
-     * On-screen only: outlines the tag. An outline rather than a border so the
-     * preview stays exactly label-sized - a border would add its own width and
-     * put a scrollbar in the preview.
+     * On-screen only: outlines the tag.
+     *
+     * <p>Drawn where the tag physically is, which is not where the cell is. The
+     * cell has been pushed right by the lead-in so that negative artwork
+     * coordinates have somewhere to live; the roll has not moved, and the media
+     * still starts at the left edge of the page. Outlining the cell drew the tag
+     * 20 mm to the right of itself and made correctly placed artwork look like
+     * it had fallen off the front.
+     *
+     * <p>An outline rather than a border, so the preview stays exactly
+     * label-sized - a border would add its own width and put a scrollbar in the
+     * preview. On ::after rather than the cell itself so it is not dragged along
+     * by the print offset and rotation, which move the artwork and not the tag.
      */
-    private static final String PREVIEW_CSS = """
-            @media screen {
-              html, body { margin: 0; padding: 0; overflow: hidden; }
-              .cell { outline: 1px dashed #9a8f7d; outline-offset: -1px; }
-            }""";
+    private static String previewCss(BigDecimal lead, LabelSettings settings) {
+        return """
+                @media screen {
+                  html, body { margin: 0; padding: 0; overflow: hidden; }
+                  .cell::after {
+                    content: ""; position: absolute; top: 0; left: %s;
+                    width: %s; height: %s;
+                    outline: 1px dashed #9a8f7d; outline-offset: -1px;
+                  }
+                }"""
+                .formatted(mm(lead.negate()), mm(settings.getLabelWidthMm()), mm(settings.getLabelHeightMm()));
+    }
 
     private static String row(String cells) {
         return "<section class=\"row\">%s</section>".formatted(cells);

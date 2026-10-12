@@ -59,8 +59,14 @@ public record LabelLayout(
     static final BigDecimal POINTS_PER_MM = new BigDecimal("2.835");
     /** Between the short name and the bars. */
     private static final BigDecimal INNER_GAP_MM = new BigDecimal("1.2");
-    /** Between the barcode block and the details block. */
-    private static final BigDecimal BLOCK_GAP_MM = new BigDecimal("3");
+    /**
+     * Between the barcode block and the details block.
+     *
+     * <p>Widened from 3 mm by the 10 px the shop asked for - 2.646 mm at the
+     * 96 dpi a browser calls a pixel. At 3 mm the weight ran close enough to
+     * the bars to read as part of them on a tag only 12 mm deep.
+     */
+    private static final BigDecimal BLOCK_GAP_MM = new BigDecimal("5.65");
     /** Between the serial number and the purity. */
     private static final BigDecimal IDENT_GAP_MM = new BigDecimal("1");
     /** Under the bars, before the serial number. */
