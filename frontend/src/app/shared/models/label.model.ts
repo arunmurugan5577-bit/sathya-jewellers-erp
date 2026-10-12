@@ -100,6 +100,21 @@ export interface LabelPrintResult {
 }
 
 /** Printers the server's machine can reach. */
+/** The print agent on the shop's counter PC, as the server last heard from it. */
+export interface LabelAgentStatus {
+  /** Whether this installation prints through the agent at all. */
+  inUse: boolean;
+  /** Heard from within the last 90 seconds. */
+  online: boolean;
+  lastSeenAt?: string | null;
+  hostName?: string | null;
+  agentVersion?: string | null;
+  printers: string[];
+  defaultPrinter?: string | null;
+  pendingPages: number;
+  failedPages: number;
+}
+
 export interface LabelPrinters {
   printers: string[];
   defaultPrinter?: string | null;

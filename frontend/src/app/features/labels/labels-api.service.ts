@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiService } from '../../core/services/api.service';
 import {
+  LabelAgentStatus,
   LabelPreview,
   LabelPrintResult,
   LabelPrinters,
@@ -26,6 +27,11 @@ export class LabelsApiService {
 
   settings(): Observable<LabelSettings> {
     return this.api.get<LabelSettings>('/labels/settings');
+  }
+
+  /** Whether the shop's print agent is listening, and what it has queued. */
+  agentStatus(context?: HttpContext): Observable<LabelAgentStatus> {
+    return this.api.get<LabelAgentStatus>('/labels/agent/status', undefined, context);
   }
 
   saveSettings(request: LabelSettingsRequest, context?: HttpContext): Observable<LabelSettings> {

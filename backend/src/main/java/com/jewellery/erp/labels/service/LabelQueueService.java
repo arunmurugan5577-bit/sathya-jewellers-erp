@@ -172,6 +172,9 @@ public class LabelQueueService {
                 .map(s -> Arrays.stream(s.split("\n")).filter(x -> !x.isBlank()).toList())
                 .orElseGet(List::of);
         return new LabelDtos.AgentStatus(
+                // Whether the shop actually prints this way is the label
+                // service's question, not the queue's; it fills this in.
+                false,
                 online,
                 lastSeen,
                 found.map(LabelPrintAgent::getHostName).orElse(null),

@@ -199,7 +199,7 @@ public class LabelService {
 
     /** Whether the shop PC is listening, for the printing screen to show. */
     public LabelDtos.AgentStatus agentStatus() {
-        return queueService.status();
+        return queueService.status().usedBy(printsThroughAgent(requireSettings()));
     }
 
     /**

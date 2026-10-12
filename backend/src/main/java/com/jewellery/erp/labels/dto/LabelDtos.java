@@ -125,6 +125,10 @@ public final class LabelDtos {
     /** Whether the shop PC is listening, and what it can print to. */
     @Schema(name = "LabelAgentStatus")
     public record AgentStatus(
+            @Schema(example = "true",
+                    description = "Whether this installation prints through the agent at all. False on a "
+                            + "counter PC that runs the application itself and spools directly.")
+            boolean inUse,
             @Schema(example = "true", description = "Heard from within the last 90 seconds") boolean online,
             java.time.Instant lastSeenAt,
             String hostName,
@@ -132,7 +136,20 @@ public final class LabelDtos {
             List<String> printers,
             String defaultPrinter,
             long pendingPages,
-            long failedPages) {}
+            long failedPages) {
+
+        /**
+         * The same status, saying whether this installation uses the agent.
+         *
+         * <p>Only the service that owns the routing rule can answer that, and
+         * the queue - which reports everything else here - has no business
+         * knowing it. So it is filled in afterwards rather than passed down.
+         */
+        public AgentStatus usedBy(boolean inUse) {
+            return new AgentStatus(inUse, online, lastSeenAt, hostName, agentVersion,
+                    printers, defaultPrinter, pendingPages, failedPages);
+        }
+    }
 
     @Schema(name = "LabelPreview")
     public record Preview(List<Label> labels, List<Problem> problems, Settings settings) {}

@@ -15,7 +15,7 @@ import { PaginatorComponent } from '../../shared/components/paginator.component'
 import { HasPermissionDirective } from '../../shared/directives/has-permission.directive';
 import { isApiError } from '../../shared/models/api-error.model';
 import { InventoryFilters, InventoryItem } from '../../shared/models/inventory.model';
-import { LabelProblem, LabelSettings } from '../../shared/models/label.model';
+import { LabelAgentStatus, LabelProblem, LabelSettings } from '../../shared/models/label.model';
 import { Lookup } from '../../shared/models/lookup.model';
 import { DEFAULT_PAGE_SIZE, Page, emptyPage } from '../../shared/models/page.model';
 import { InventoryService } from '../inventory/inventory.service';
@@ -61,6 +61,20 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
         @if (settings(); as current) {
           <span class="chip">Short name: <strong>{{ current.shopShortName }}</strong></span>
           <span class="chip">Printer: <strong>{{ printerName() }}</strong></span>
+          @if (agent(); as status) {
+            <!-- Only when the page is going to the shop: on a counter PC that
+                 runs the application itself there is no agent to report on. -->
+            @if (viaAgent()) {
+              <span
+                class="chip"
+                [class.chip--ok]="status.online"
+                [class.chip--bad]="!status.online"
+                [title]="agentTooltip()"
+              >
+                Shop agent: <strong>{{ status.online ? 'connected' : 'not running' }}</strong>
+              </span>
+            }
+          }
           <button
             *appHasPermission="permissions.LABEL_EDIT"
             type="button"
@@ -333,6 +347,16 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
         background: var(--surface-sunken);
         font-size: var(--text-sm);
       }
+      /* The agent chip earns a colour: it is the one thing on this screen that
+         decides whether pressing Print does anything. */
+      .chip--ok {
+        background: color-mix(in srgb, var(--success) 16%, var(--surface-sunken));
+      }
+      .chip--bad {
+        background: color-mix(in srgb, var(--danger) 16%, var(--surface-sunken));
+        color: var(--danger);
+        font-weight: 600;
+      }
       .selection {
         display: flex;
         flex-wrap: wrap;
@@ -379,6 +403,39 @@ export class LabelPrintComponent {
   protected readonly startColumn = signal(1);
   protected readonly settings = signal<LabelSettings | null>(null);
   protected readonly settingsOpen = signal(false);
+  /**
+   * The shop's print agent, polled while this screen is open.
+   *
+   * <p>Without it the only way to find out whether the counter PC is listening
+   * was to press Print and read the refusal, which is a poor way to learn that
+   * a window got closed. The README has always pointed at a status display;
+   * this is it.
+   */
+  protected readonly agent = signal<LabelAgentStatus | null>(null);
+
+  /**
+   * Whether this installation prints through the agent.
+   *
+   * <p>The setting is not the whole answer - a hosted server with no printers
+   * of its own routes to the agent whatever the setting says - so the server's
+   * answer is inferred from the fact that it reported an agent at all. The
+   * endpoint is only consulted when the agent could matter.
+   */
+  protected readonly viaAgent = computed(() => this.agent()?.inUse === true);
+
+  protected readonly agentTooltip = computed(() => {
+    const status = this.agent();
+    if (!status) {
+      return '';
+    }
+    if (!status.online) {
+      return 'Start start-agent.bat on the counter PC. Pages wait until it does.';
+    }
+    const where = status.hostName ? ' on ' + status.hostName : '';
+    const queued = status.pendingPages ? ', ' + status.pendingPages + ' page(s) waiting' : '';
+    const failed = status.failedPages ? ', ' + status.failedPages + ' failed' : '';
+    return 'Agent ' + (status.agentVersion ?? '') + where + queued + failed;
+  });
   protected readonly problems = signal<LabelProblem[]>([]);
   protected readonly statusMessage = signal<string | null>(null);
 
@@ -405,6 +462,25 @@ export class LabelPrintComponent {
 
   /** Shown beside the title so the counter knows where the labels will come out. */
   protected readonly printerName = computed(() => this.settings()?.printerName || 'default printer');
+
+  /**
+   * Keeps the agent chip honest while the screen is open.
+   *
+   * <p>Every 20 seconds, against the agent's own 90 second staleness window, so
+   * a window closed at the counter shows up here well before anyone presses
+   * Print. Quiet on failure: a counter PC install has no agent and the endpoint
+   * is pointless there, and a toast every 20 seconds would be its own bug.
+   */
+  private watchAgent(): void {
+    const poll = () =>
+      this.api.agentStatus(quiet()).subscribe({
+        next: (status) => this.agent.set(status),
+        error: () => this.agent.set(null),
+      });
+    poll();
+    const timer = setInterval(poll, 20_000);
+    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+  }
 
   protected readonly tagsAcross = computed(() => Number(this.settings()?.labelsAcross ?? 1));
   protected readonly tagPositions = computed(() =>
@@ -433,6 +509,7 @@ export class LabelPrintComponent {
     inject(ItemTypeService).lookup().subscribe((values) => this.itemTypes.set(values));
     inject(CategoryService).lookup().subscribe((values) => this.categories.set(values));
     this.api.settings().subscribe((settings) => this.settings.set(settings));
+    this.watchAgent();
 
     // Deep link from the inventory screen: /labels?serial=000123
     const serial = inject(ActivatedRoute).snapshot.queryParamMap.get('serial');
