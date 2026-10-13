@@ -70,7 +70,8 @@ import { applyServerErrors, clearServerErrors } from '../../shared/utils/form-er
                     id="gstin"
                     class="input gstin"
                     formControlName="gstin"
-                    maxlength="15"
+                    (input)="normaliseGstin($event)"
+                    maxlength="20"
                     autocapitalize="characters"
                     placeholder="33AAAAA0000A1Z5"
                     [class.input--invalid]="invalid('gstin')"
@@ -220,7 +221,14 @@ export class ShopSettingsComponent {
     mobileNumber: ['', Validators.pattern(/^$|^[0-9+][0-9 -]{5,19}$/)],
     alternateMobileNumber: ['', Validators.pattern(/^$|^[0-9+][0-9 -]{5,19}$/)],
     email: ['', [Validators.email, Validators.maxLength(150)]],
-    gstin: ['', Validators.pattern(/^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/)],
+    // Case and stray spaces are not mistakes to refuse: submit() already
+    // trims and upper-cases, so demanding that of the typist only meant the
+    // Save button went dead for anyone who typed their own GSTIN in lower
+    // case or pasted one with a space on the end.
+    gstin: [
+      '',
+      Validators.pattern(/^\s*$|^\s*[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]\s*$/),
+    ],
   });
 
   constructor() {
@@ -253,6 +261,60 @@ export class ShopSettingsComponent {
     this.form.markAsPristine();
   }
 
+  /** What each control is called on screen, for the message above the form. */
+  private static readonly FIELD_LABELS: Record<string, string> = {
+    shopName: 'Shop name',
+    gstin: 'GSTIN',
+    addressLine1: 'Address line 1',
+    addressLine2: 'Address line 2',
+    city: 'City',
+    state: 'State',
+    pincode: 'Pincode',
+    mobileNumber: 'Mobile number',
+    alternateMobileNumber: 'Alternate number',
+    email: 'E-mail',
+  };
+
+  private invalidFieldNames(): string[] {
+    return Object.keys(this.form.controls)
+      .filter((name) => this.form.get(name)?.invalid)
+      .map((name) => ShopSettingsComponent.FIELD_LABELS[name] ?? name);
+  }
+
+  /** Puts the cursor where the problem is, rather than leaving it to be hunted. */
+  private focusFirstInvalid(): void {
+    const first = Object.keys(this.form.controls).find((name) => this.form.get(name)?.invalid);
+    if (!first) {
+      return;
+    }
+    const field = document.getElementById(first);
+    field?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    (field as HTMLInputElement | null)?.focus({ preventScroll: true });
+  }
+
+  /**
+   * Upper-cases the GSTIN and drops stray spaces as it is typed or pasted.
+   *
+   * <p>A GSTIN is copied out of a certificate or an e-mail as often as it is
+   * typed, and it arrives with a space on one end or in lower case. Both used
+   * to fail the pattern, which made the Save button do nothing at all. Fixing
+   * it at the point of entry rather than at submit means the field shows the
+   * value that will actually be stored.
+   *
+   * <p>maxlength is 20 rather than 15 for the same reason: at 15 the browser
+   * truncated a pasted " 33AAAAA0000A1Z5" to " 33AAAAA0000A1Z" and the last
+   * character was gone before anything could tidy it up.
+   */
+  protected normaliseGstin(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const tidy = input.value.replace(/\s+/g, '').toUpperCase();
+    if (tidy === input.value) {
+      return;
+    }
+    input.value = tidy;
+    this.form.controls.gstin.setValue(tidy);
+  }
+
   protected invalid(control: keyof typeof this.form.controls): boolean {
     const field = this.form.controls[control];
     return field.invalid && (field.dirty || field.touched);
@@ -274,6 +336,16 @@ export class ShopSettingsComponent {
 
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      // Saying nothing was the real complaint: on a form this tall the
+      // offending field is usually scrolled out of sight, so the button simply
+      // appeared not to work.
+      const names = this.invalidFieldNames();
+      this.formError.set(
+        names.length === 1
+          ? `${names[0]} needs attention before this can be saved.`
+          : `These need attention before this can be saved: ${names.join(', ')}.`,
+      );
+      this.focusFirstInvalid();
       return;
     }
 
