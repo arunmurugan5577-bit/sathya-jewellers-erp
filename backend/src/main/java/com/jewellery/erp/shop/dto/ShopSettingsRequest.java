@@ -50,6 +50,9 @@ public record ShopSettingsRequest(
 
         @Schema(example = "33AAAAA0000A1Z5", description = "15 character GSTIN")
         @Pattern(
-                regexp = "^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$",
+                // The fourteenth character is Z on most registrations but it is
+                // a reserved position, not a literal - the shop's own GSTIN has
+                // a digit there - so it is checked as alphanumeric.
+                regexp = "^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$",
                 message = "Enter a valid 15 character GSTIN, for example 33AAAAA0000A1Z5")
         String gstin) {}

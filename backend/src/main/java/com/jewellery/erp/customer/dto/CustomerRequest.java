@@ -34,7 +34,10 @@ public record CustomerRequest(
         String pincode,
 
         @Pattern(
-                regexp = "^$|^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]$",
+                // The fourteenth character is Z on most registrations but it is
+                // a reserved position, not a literal, so it is checked as
+                // alphanumeric like its neighbours.
+                regexp = "^$|^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][0-9A-Za-z]{3}$",
                 message = "Enter a valid 15 character GSTIN")
         String gstin,
 

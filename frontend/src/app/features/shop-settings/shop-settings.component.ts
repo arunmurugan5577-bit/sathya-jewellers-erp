@@ -227,7 +227,13 @@ export class ShopSettingsComponent {
     // case or pasted one with a space on the end.
     gstin: [
       '',
-      Validators.pattern(/^\s*$|^\s*[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]\s*$/),
+      // The fourteenth character is Z on most registrations, but it is a
+      // reserved position rather than a literal and the department issues
+      // numbers that hold something else - the shop's own GSTIN has a digit
+      // there. So it is checked as alphanumeric like its neighbours. Whether a
+      // number is real is the department's business; this catches a GSTIN of
+      // the wrong length or shape and nothing more.
+      Validators.pattern(/^\s*$|^\s*[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][0-9A-Za-z]{3}\s*$/),
     ],
   });
 

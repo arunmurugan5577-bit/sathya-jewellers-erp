@@ -54,11 +54,11 @@
 --  ===========================================================================
 --
 --  The tables already exist, so Flyway must be told not to re-create them.
---  Start the backend once with a baseline at version 25:
+--  Start the backend once with a baseline at version 26:
 --
 --    mvn spring-boot:run -Dspring-boot.run.jvmArguments="\
 --      -Dspring.flyway.baseline-on-migrate=true \
---      -Dspring.flyway.baseline-version=25"
+--      -Dspring.flyway.baseline-version=26"
 --
 --  (start-backend.ps1 already passes these.) Flyway then records the schema as
 --  being at V24 and applies only later migrations.
@@ -417,7 +417,7 @@ CREATE TABLE shop_settings (
     -- Enforces the singleton: only the row with id = 1 may ever exist.
     CONSTRAINT ck_shop_settings_singleton CHECK (id = 1),
     CONSTRAINT ck_shop_settings_pincode   CHECK (pincode IS NULL OR pincode ~ '^[0-9]{6}$'),
-    CONSTRAINT ck_shop_settings_gstin     CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'),
+    CONSTRAINT ck_shop_settings_gstin     CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$'),
     CONSTRAINT ck_shop_settings_email     CHECK (email IS NULL OR email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[A-Za-z]{2,}$')
 );
 
@@ -701,7 +701,7 @@ CREATE TABLE customers (
     CONSTRAINT ck_customers_mobile      CHECK (mobile_number IS NULL OR mobile_number ~ '^[0-9+][0-9 -]{5,19}$'),
     CONSTRAINT ck_customers_email       CHECK (email IS NULL OR email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[A-Za-z]{2,}$'),
     CONSTRAINT ck_customers_pincode     CHECK (pincode IS NULL OR pincode ~ '^[0-9]{6}$'),
-    CONSTRAINT ck_customers_gstin       CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'),
+    CONSTRAINT ck_customers_gstin       CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$'),
     CONSTRAINT ck_customers_pan         CHECK (pan IS NULL OR pan ~ '^[A-Z]{5}[0-9]{4}[A-Z]$')
 );
 
@@ -1875,6 +1875,42 @@ CREATE UNIQUE INDEX uk_sale_items_active_inventory_item
 COMMENT ON COLUMN sale_items.bulk IS
     'TRUE when the line sold weight out of a box rather than one whole article.';
 
+-- ---------------------------------------------------------------------------
+-- V26__gstin_fourteenth_character.sql
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- V26: a GSTIN does not have to carry Z in its fourteenth place.
+--
+-- The checks written in V1 and V7 hardcoded Z there:
+--
+--     ^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$
+--                                                 ^
+--
+-- That is the common shorthand, and it is wrong. The fourteenth character is Z
+-- for most registrations but it is a reserved position, not a literal, and the
+-- department issues numbers that hold something else. The shop's own GSTIN is
+-- one of them - 33FZDPS3754Q12L - so the application refused the number printed
+-- on its own registration certificate, on every screen that takes one.
+--
+-- Everything else about the shape is kept, so the check still catches a GSTIN
+-- that is the wrong length, or has letters where the state code belongs, or
+-- digits inside the PAN. Only the position that was never a literal is freed.
+--
+-- Whether a given GSTIN is real is for the department to say; the only
+-- authority here is the checksum, and a check constraint is the wrong place to
+-- compute one.
+-- ===========================================================================
+
+ALTER TABLE shop_settings
+    DROP CONSTRAINT ck_shop_settings_gstin,
+    ADD CONSTRAINT ck_shop_settings_gstin
+        CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$');
+
+ALTER TABLE customers
+    DROP CONSTRAINT ck_customers_gstin,
+    ADD CONSTRAINT ck_customers_gstin
+        CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$');
+
 -- --- Demo shop details -----------------------------------------------------
 -- Printed at the top of every invoice and purchase bill. Placeholder values:
 -- correct them on the Shop Settings screen. GSTIN is deliberately left empty -
@@ -2084,5 +2120,5 @@ ORDER BY u.username;
 \echo '  used for anything real.'
 \echo ''
 \echo '  Start the backend ONCE with:'
-\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=25'
+\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=26'
 \echo '###########################################################################'
