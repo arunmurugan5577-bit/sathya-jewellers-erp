@@ -120,6 +120,51 @@ class LabelLayoutTest {
     }
 
     @Test
+    @DisplayName("the short name gives way rather than pushing the weight off a full tag")
+    void theMarkGivesWayOnAFullTag() {
+        // The shop's silver kolusu, at the detail type size the shop actually
+        // uses: a long name, a weight and a size already fill the column on a
+        // 12 mm tag. Adding a fourth line for the short name took the content
+        // to 12.9 mm and stopped the tag printing at all.
+        LabelSettings settings = tagSettings();
+        settings.setDetailFontPt(new BigDecimal("7.00"));
+
+        LabelDtos.Label kolusu = new LabelDtos.Label(9L, "000001", "80", "Silver T.Kolusu",
+                new BigDecimal("36.200"), "5.5\" S TYPE", "Silver", "Silver T.Kolusu",
+                "Silver T.Kolusu", "SJ", "AVAILABLE");
+
+        LabelLayout layout = LabelLayout.of(kolusu, settings, renderer.modules("000001"), false);
+
+        assertThat(layout.bottomMm())
+                .as("content must stay on the tag")
+                .isLessThanOrEqualTo(settings.getLabelHeightMm());
+        assertThat(layout.elements())
+                .as("the mark is what gives way, not the weight")
+                .noneMatch(element -> element instanceof LabelLayout.Text text
+                        && text.role() == LabelLayout.Role.SHOP);
+        // What the tag is actually for is all still there.
+        assertThat(detail(layout, "GMS.36.200")).isNotNull();
+        assertThat(detail(layout, "Size:5.5\" S TYPE")).isNotNull();
+        assertThat(bars(layout)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("where there is room, the short name heads the column in the column's own size")
+    void theMarkIsKeptWhenItFits() {
+        LabelSettings settings = tagSettings();
+        settings.setDetailFontPt(new BigDecimal("4.00"));
+
+        LabelLayout layout = layoutOf(gold(), settings);
+        LabelLayout.Text shop = text(layout, LabelLayout.Role.SHOP);
+
+        assertThat(shop.value()).isEqualTo("SJ");
+        assertThat(shop.fontPt())
+                .as("set in the column's type size, not its own")
+                .isEqualByComparingTo(settings.getDetailFontPt());
+        assertThat(layout.bottomMm()).isLessThanOrEqualTo(settings.getLabelHeightMm());
+    }
+
+    @Test
     @DisplayName("no side mark means the bars start at the margin, as they used to")
     void noSideMarkLeavesTheStripOut() {
         LabelSettings settings = tagSettings();

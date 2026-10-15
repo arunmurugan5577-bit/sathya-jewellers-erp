@@ -125,7 +125,6 @@ public record LabelLayout(
 
         // The logo box is square, so it is as wide as it is tall.
         BigDecimal logoSize = useLogo ? settings.getShopLogoHeightMm() : BigDecimal.ZERO;
-        BigDecimal shopW = shop.isEmpty() ? BigDecimal.ZERO : textWidthMm(shop, settings.getShopFontPt());
         // Turned on its side, so its box is the other way round: as wide as one
         // line is tall, and as tall as the string is long.
         BigDecimal sideW = sideMark.isEmpty() ? BigDecimal.ZERO : lineHeightMm(settings.getShopFontPt());
@@ -144,7 +143,6 @@ public record LabelLayout(
         // The side mark takes the strip before the bars when there is room for
         // it, and is dropped when there is not. Narrowing the bars to make it
         // fit is how a barcode stops scanning, so that is never an option.
-        BigDecimal shopH = shop.isEmpty() ? BigDecimal.ZERO : lineHeightMm(settings.getShopFontPt());
         boolean hasSideMark = !sideMark.isEmpty()
                 && sideW.add(INNER_GAP_MM).add(barsColumnW).compareTo(contentW) <= 0;
         BigDecimal codeW = hasSideMark ? sideW.add(INNER_GAP_MM).add(barsColumnW) : barsColumnW;
@@ -154,15 +152,32 @@ public record LabelLayout(
         BigDecimal detailTextW = details.stream()
                 .map(line -> textWidthMm(line, settings.getDetailFontPt()))
                 .reduce(BigDecimal.ZERO, BigDecimal::max);
-        // The short name is the first line of this block, in its own font, so
-        // it is measured apart from the rest.
-        boolean hasShopLine = !shop.isEmpty();
-        BigDecimal detailTextH = detailLineH.multiply(BigDecimal.valueOf(details.size())).add(shopH);
+        BigDecimal linesH = detailLineH.multiply(BigDecimal.valueOf(details.size()));
         // The logo is the last thing in the detail column, under the size line.
-        BigDecimal detailW = detailTextW.max(shopW).max(logoSize);
-        BigDecimal detailH = useLogo
-                ? detailTextH.add(details.isEmpty() ? BigDecimal.ZERO : LOGO_TOP_MM).add(logoSize)
-                : detailTextH;
+        BigDecimal logoExtra = useLogo
+                ? (details.isEmpty() ? BigDecimal.ZERO : LOGO_TOP_MM).add(logoSize)
+                : BigDecimal.ZERO;
+
+        // The short name heads this column in the column's own type size, not
+        // its own: it belongs to the block it sits on top of, and the smaller
+        // of the two is the one that stands a chance of fitting.
+        //
+        // And it is only printed when the column still fits the tag with it.
+        // A mark is the least of what a tag carries - the barcode, the weight
+        // and the size are the point of the thing - so where the two cannot
+        // both be had, the mark gives way rather than the print failing. On a
+        // 12 mm tag with the detail type at 7 pt, a name, a weight and a size
+        // already fill the column; a fourth line pushed it to 12.9 mm and
+        // stopped the shop printing at all.
+        BigDecimal shopLineH = shop.isEmpty() ? BigDecimal.ZERO : lineHeightMm(settings.getDetailFontPt());
+        boolean hasShopLine = !shop.isEmpty()
+                && linesH.add(logoExtra).add(shopLineH).compareTo(contentH) <= 0;
+
+        BigDecimal detailTextH = linesH.add(hasShopLine ? shopLineH : BigDecimal.ZERO);
+        BigDecimal detailW = detailTextW
+                .max(hasShopLine ? textWidthMm(shop, settings.getDetailFontPt()) : BigDecimal.ZERO)
+                .max(logoSize);
+        BigDecimal detailH = detailTextH.add(logoExtra);
         boolean hasDetailBlock = hasShopLine || !details.isEmpty() || useLogo;
 
         // Side by side when both blocks fit across the tag. When they do not, the
@@ -212,8 +227,8 @@ public record LabelLayout(
                     : codeY.add(codeH).add(IDENT_TOP_MM);
             BigDecimal lineY = detailY;
             if (hasShopLine) {
-                elements.add(new Text(shop, detailX, lineY, settings.getShopFontPt(), true, Role.SHOP));
-                lineY = lineY.add(shopH);
+                elements.add(new Text(shop, detailX, lineY, settings.getDetailFontPt(), true, Role.SHOP));
+                lineY = lineY.add(shopLineH);
             }
             for (int line = 0; line < details.size(); line++) {
                 // The description stays the bold one: it is what a jeweller
