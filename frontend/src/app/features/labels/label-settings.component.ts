@@ -28,8 +28,17 @@ import { LabelsApiService } from './labels-api.service';
         <div class="field field--full">
           <label class="field__label field__label--required" for="shopShortName">Shop short name</label>
           <input id="shopShortName" class="input short" formControlName="shopShortName" maxlength="8" />
-          <p class="field__hint">Printed beside the barcode, e.g. SJ. Saved once and used on every label.</p>
+          <p class="field__hint">Heads the description on the tag, e.g. SJ. Saved once and used on every label.</p>
           <app-field-error [control]="form.controls.shopShortName" label="Short name" />
+        </div>
+
+        <div class="field field--full">
+          <label class="field__label" for="sideMarkText">Side mark</label>
+          <input id="sideMarkText" class="input short" formControlName="sideMarkText" maxlength="8" />
+          <p class="field__hint">
+            Printed standing up in the strip before the barcode, e.g. TKS. Leave blank for nothing
+            there - the barcode then starts at the left margin.
+          </p>
         </div>
 
         <div class="field field--full">
@@ -220,6 +229,7 @@ export class LabelSettingsComponent implements OnInit {
   protected readonly form = this.fb.nonNullable.group({
     shopShortName: ['', [Validators.required, Validators.maxLength(8)]],
     printerName: [''],
+    sideMarkText: [''],
     printMode: ['DIRECT' as 'DIRECT' | 'AGENT', Validators.required],
     shopMark: ['LOGO' as 'LOGO' | 'TEXT' | 'NONE', Validators.required],
     shopLogoHeightMm: [6.5, [Validators.required, Validators.min(2), Validators.max(40)]],
@@ -248,6 +258,7 @@ export class LabelSettingsComponent implements OnInit {
     this.form.patchValue({
       shopShortName: current.shopShortName,
       printerName: current.printerName ?? '',
+      sideMarkText: current.sideMarkText ?? '',
       printMode: current.printMode ?? 'DIRECT',
       shopMark: current.shopMark ?? 'LOGO',
       shopLogoHeightMm: Number(current.shopLogoHeightMm ?? 6.5),
@@ -286,6 +297,7 @@ export class LabelSettingsComponent implements OnInit {
           ...raw,
           shopShortName: raw.shopShortName.trim(),
           printerName: raw.printerName?.trim() || null,
+          sideMarkText: raw.sideMarkText?.trim() || null,
           rotationDegrees: Number(raw.rotationDegrees),
           labelsAcross: Number(raw.labelsAcross),
         },

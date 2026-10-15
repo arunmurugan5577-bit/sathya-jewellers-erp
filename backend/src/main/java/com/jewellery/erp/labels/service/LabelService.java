@@ -102,6 +102,7 @@ public class LabelService {
                     "The printable height cannot be more than the tag length.");
         }
         settings.setShopShortName(StringNormalizer.trimToNull(request.shopShortName()));
+        settings.setSideMarkText(StringNormalizer.trimToNull(request.sideMarkText()));
         settings.setLabelWidthMm(request.labelWidthMm());
         settings.setLabelHeightMm(request.labelHeightMm());
         settings.setLabelsAcross(request.labelsAcross());
@@ -398,6 +399,7 @@ public class LabelService {
     private static LabelDtos.Settings toDto(LabelSettings settings) {
         return new LabelDtos.Settings(
                 settings.getShopShortName(),
+                settings.getSideMarkText(),
                 settings.getLabelWidthMm(),
                 settings.getLabelHeightMm(),
                 settings.getLabelsAcross(),

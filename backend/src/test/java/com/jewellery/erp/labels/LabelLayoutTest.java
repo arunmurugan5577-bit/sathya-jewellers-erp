@@ -20,9 +20,18 @@ class LabelLayoutTest {
     private final Code128Renderer renderer = new Code128Renderer();
 
     /** The shop's tag: 60 x 12 mm, one across. */
+    private static LabelLayout.VerticalText sideMark(LabelLayout layout) {
+        return layout.elements().stream()
+                .filter(LabelLayout.VerticalText.class::isInstance)
+                .map(LabelLayout.VerticalText.class::cast)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no side mark on the tag"));
+    }
+
     private static LabelSettings tagSettings() {
         LabelSettings settings = new LabelSettings();
         settings.setShopShortName("SJ");
+        settings.setSideMarkText("TKS");
         settings.setLabelWidthMm(new BigDecimal("60.00"));
         settings.setLabelHeightMm(new BigDecimal("12.00"));
         settings.setLabelsAcross((short) 1);
@@ -77,23 +86,61 @@ class LabelLayoutTest {
     }
 
     @Test
-    @DisplayName("short name left of the bars, serial under them, details to the right")
+    @DisplayName("side mark on its side before the bars, short name heading the details after them")
     void followsTheShopsLayout() {
-        LabelLayout layout = layoutOf(gold(), tagSettings());
+        LabelSettings settings = tagSettings();
+        LabelLayout layout = layoutOf(gold(), settings);
 
         LabelLayout.Bars bars = bars(layout);
+        LabelLayout.VerticalText side = sideMark(layout);
         LabelLayout.Text shop = text(layout, LabelLayout.Role.SHOP);
         LabelLayout.Text serial = text(layout, LabelLayout.Role.SERIAL);
         LabelLayout.Text purity = text(layout, LabelLayout.Role.PURITY);
         LabelLayout.Text name = text(layout, LabelLayout.Role.NAME);
 
-        assertThat(shop.xMm()).isLessThan(bars.xMm());
+        // The strip before the bars belongs to the side mark, standing up.
+        assertThat(side.value()).isEqualTo("TKS");
+        assertThat(side.xMm()).isEqualByComparingTo(settings.getMarginLeftMm());
+        assertThat(side.xMm()).isLessThan(bars.xMm());
+
+        // The serial still reads under the bars, the purity after it.
         assertThat(serial.yMm()).isGreaterThan(bars.yMm().add(bars.heightMm()).subtract(BigDecimal.ONE));
         assertThat(purity.xMm()).isGreaterThan(serial.xMm());
-        assertThat(name.xMm()).isGreaterThan(bars.xMm().add(bars.widthMm()));
+
+        // The short name has moved to the top of the block after the bars, and
+        // the description now sits under it rather than beside the barcode.
+        assertThat(shop.value()).isEqualTo("SJ");
+        assertThat(shop.xMm()).isGreaterThan(bars.xMm().add(bars.widthMm()));
+        assertThat(shop.xMm()).isEqualByComparingTo(name.xMm());
+        assertThat(shop.yMm()).isLessThan(name.yMm());
+
         assertThat(layout.sideBySide()).isTrue();
         assertThat(serial.value()).isEqualTo("905351");
         assertThat(purity.value()).isEqualTo("22K / 916");
+    }
+
+    @Test
+    @DisplayName("no side mark means the bars start at the margin, as they used to")
+    void noSideMarkLeavesTheStripOut() {
+        LabelSettings settings = tagSettings();
+        settings.setSideMarkText("");
+
+        LabelLayout layout = layoutOf(gold(), settings);
+
+        assertThat(layout.elements()).noneMatch(LabelLayout.VerticalText.class::isInstance);
+        // The bars sit centred in their column, so the column - not the bars -
+        // is what starts at the margin. The leftmost ink on the tag is what
+        // says the strip has gone.
+        BigDecimal leftmost = layout.elements().stream()
+                .map(element -> switch (element) {
+                    case LabelLayout.Bars b -> b.xMm();
+                    case LabelLayout.Text t -> t.xMm();
+                    case LabelLayout.VerticalText v -> v.xMm();
+                    case LabelLayout.Logo l -> l.xMm();
+                })
+                .reduce(BigDecimal::min)
+                .orElseThrow();
+        assertThat(leftmost).isEqualByComparingTo(settings.getMarginLeftMm());
     }
 
     @Test
@@ -214,15 +261,16 @@ class LabelLayoutTest {
 
         LabelLayout.Logo logo = logo(layout);
         LabelLayout.Text size = detail(layout, "Size:11");
-        LabelLayout.Text shop = text(layout, LabelLayout.Role.SHOP);
 
         // Under the size line, lined up with the detail column.
         assertThat(logo.yMm()).isGreaterThan(size.yMm());
         assertThat(logo.xMm()).isEqualByComparingTo(size.xMm());
-        // The short name is back where it was: left of the bars, at the margin.
-        assertThat(shop.value()).isEqualTo("SJ");
-        assertThat(shop.xMm()).isLessThan(bars(layout).xMm());
-        assertThat(shop.xMm()).isEqualByComparingTo(settings.getMarginLeftMm());
+        // One shop mark, not two: where the logo is drawn, the short name is
+        // not also printed above the description.
+        assertThat(layout.elements())
+                .as("short name as well as the logo")
+                .noneMatch(element -> element instanceof LabelLayout.Text text
+                        && text.role() == LabelLayout.Role.SHOP);
         // And none of it runs off the tag.
         assertThat(layout.bottomMm()).isLessThanOrEqualTo(settings.getLabelHeightMm());
     }

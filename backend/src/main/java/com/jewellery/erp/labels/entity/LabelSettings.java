@@ -33,9 +33,19 @@ public class LabelSettings extends AuditableEntity {
     @Column(name = "id", nullable = false)
     private Long id = SINGLETON_ID;
 
-    /** Printed beside the barcode, e.g. "SJ" for Sathya Jewellers. */
+    /** Printed above the description, e.g. "SJ" for Sathya Jewellers. */
     @Column(name = "shop_short_name", nullable = false, length = 8)
     private String shopShortName;
+
+    /**
+     * A second mark, set on its side in the strip before the barcode.
+     *
+     * <p>That strip is about 3 mm wide and nothing reads across it; turned
+     * upright, three characters fit the tag's 12 mm height comfortably. Empty
+     * means nothing is printed there and the bars start at the left margin.
+     */
+    @Column(name = "side_mark_text", length = 8)
+    private String sideMarkText;
 
     @Column(name = "label_width_mm", nullable = false, precision = 6, scale = 2)
     private BigDecimal labelWidthMm;

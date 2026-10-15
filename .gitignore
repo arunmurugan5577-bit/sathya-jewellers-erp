@@ -6,6 +6,10 @@
 secrets.local.ps1
 tools/print-agent/agent.properties
 
+# A zip of the agent folder carries agent.properties inside it, password and
+# all, where a scan of the diff would never see it.
+tools/print-agent*.zip
+
 # --- build output --------------------------------------------------------
 target/
 build/

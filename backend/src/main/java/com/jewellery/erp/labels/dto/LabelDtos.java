@@ -157,6 +157,8 @@ public final class LabelDtos {
     @Schema(name = "LabelSettings")
     public record Settings(
             @Schema(example = "SJ") String shopShortName,
+            @Schema(example = "TKS", description = "Printed on its side before the barcode. Empty for nothing.")
+            String sideMarkText,
             BigDecimal labelWidthMm,
             BigDecimal labelHeightMm,
             @Schema(example = "5", description = "Tags side by side across the roll") short labelsAcross,
@@ -187,6 +189,10 @@ public final class LabelDtos {
             @NotBlank(message = "Shop short name is required")
             @Size(max = 8, message = "Short name must not exceed 8 characters")
             String shopShortName,
+
+            @Schema(example = "TKS", description = "Printed on its side before the barcode. Empty for nothing.")
+            @Size(max = 8, message = "Side mark must not exceed 8 characters")
+            String sideMarkText,
 
             @NotNull @DecimalMin(value = "10", message = "Label width must be at least 10 mm")
             @DecimalMax(value = "200", message = "Label width must not exceed 200 mm")

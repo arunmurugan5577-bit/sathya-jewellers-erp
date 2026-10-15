@@ -107,6 +107,7 @@ public class LabelDocumentBuilder {
                 /* Crisp, not smoothed: the bitmap is already at its printed dot count. */
                 .el--logo { image-rendering: pixelated; }
                 .el--bold { font-weight: 700; }
+                .el--side { transform-origin: 0 0; transform: rotate(-90deg) translateX(-100%%); }
                 .el svg { display: block; }
                 %s
                 </style></head><body>%s</body></html>
@@ -168,6 +169,16 @@ public class LabelDocumentBuilder {
                 body.append("<div class=\"el%s\" style=\"left:%s;top:%s;font-size:%spt\">%s</div>".formatted(
                         text.bold() ? " el--bold" : "",
                         mm(text.xMm()), mm(text.yMm()), trim(text.fontPt()), escape(text.value())));
+            } else if (element instanceof LabelLayout.VerticalText side) {
+                // rotate() turns about the top-left, which would swing the text
+                // up out of the tag; translateX(-100%) first slides it back by
+                // its own length so the box lands exactly where the layout put
+                // it. Doing it in percentages rather than millimetres means the
+                // browser's measurement of the string is used, not an estimate.
+                body.append(("<div class=\"el el--side%s\" style=\"left:%s;top:%s;font-size:%spt\">"
+                        + "%s</div>").formatted(
+                        side.bold() ? " el--bold" : "",
+                        mm(side.xMm()), mm(side.yMm()), trim(side.fontPt()), escape(side.value())));
             } else if (element instanceof LabelLayout.Logo logo) {
                 // The same black-and-white bitmap the printer is handed, so the
                 // preview shows the blockiness the tag will actually have.

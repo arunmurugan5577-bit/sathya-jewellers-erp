@@ -49,6 +49,8 @@ export interface LabelAgentStatus {
 
 export interface LabelSettings {
   shopShortName: string;
+  /** Printed on its side before the barcode. Empty for nothing. */
+  sideMarkText?: string | null;
   /** DIRECT when the printer is on the server; AGENT when it is at the shop. */
   printMode: LabelPrintMode;
   /** What stands for the shop beside the barcode. */

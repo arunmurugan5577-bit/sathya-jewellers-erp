@@ -17,21 +17,22 @@ import java.util.List;
  * preview at all.
  *
  * <pre>
- *   SJ ||||||||||   WOMENS RING
- *      905351 22K / 916  GMS.20.800
+ *   T                SJ
+ *   K  ||||||||||     WOMENS RING
+ *   S  905351 22K/916 GMS.20.800
  * </pre>
  *
- * The short name sits left of the bars, the serial number (and, for gold, the
- * purity after it) reads underneath, and the name / weight / size block goes to
- * the right - or below, when the tag is too narrow for both side by side.
- * Shrinking the bars to make room is how a barcode stops scanning, so the layout
- * never does that.
+ * The side mark stands on its side in the strip before the bars, the serial
+ * number (and, for gold, the purity after it) reads underneath them, and the
+ * short name heads the name / weight / size block on the right - or below, when
+ * the tag is too narrow for both side by side. Shrinking the bars to make room
+ * is how a barcode stops scanning, so the layout never does that.
  */
 public record LabelLayout(
         BigDecimal widthMm, BigDecimal heightMm, List<Element> elements, boolean sideBySide) {
 
     /** A piece of the label, positioned by its top-left corner. */
-    public sealed interface Element permits Bars, Text, Logo {}
+    public sealed interface Element permits Bars, Text, VerticalText, Logo {}
 
     /** The shop logo, in a square box. The bitmap itself is the renderer's business. */
     public record Logo(BigDecimal xMm, BigDecimal yMm, BigDecimal sizeMm) implements Element {}
@@ -46,6 +47,17 @@ public record LabelLayout(
 
     /** @param yMm top of the line; renderers add their own ascent to find the baseline */
     public record Text(String value, BigDecimal xMm, BigDecimal yMm, BigDecimal fontPt, boolean bold, Role role)
+            implements Element {}
+
+    /**
+     * Text turned a quarter turn, reading upwards.
+     *
+     * <p>Positioned by the top-left of the box it ends up occupying, like every
+     * other element, so a renderer does not have to know which way it was
+     * turned to place it. Its box is as wide as the font's line height and as
+     * tall as the string is long - the opposite way round from {@link Text}.
+     */
+    public record VerticalText(String value, BigDecimal xMm, BigDecimal yMm, BigDecimal fontPt, boolean bold)
             implements Element {}
 
     public enum Role {
@@ -95,12 +107,18 @@ public record LabelLayout(
         ShopMark mark = settings.getShopMark() == null ? ShopMark.TEXT : settings.getShopMark();
         // A logo with no size cannot be drawn; fall back rather than fail.
         boolean useLogo = mark == ShopMark.LOGO && logoAvailable && settings.getShopLogoHeightMm() != null;
-        // The short name keeps its own place to the left of the bars. The logo,
-        // when there is one, goes under the detail block rather than competing
-        // with the name for that slot.
-        String shop = mark == ShopMark.NONE || label.shopShortName() == null
+        // The short name heads the detail block; the strip before the bars
+        // belongs to the side mark.
+        //
+        // A tag carries one shop mark, not two: where the logo is drawn it is
+        // the mark, and printing the name above it as well would both repeat
+        // the shop and cost the detail column a line it has not got on a tag
+        // 12 mm deep. The name still appears when a logo was asked for but
+        // cannot be drawn, which is the existing fallback.
+        String shop = mark == ShopMark.NONE || useLogo || label.shopShortName() == null
                 ? ""
                 : label.shopShortName().trim();
+        String sideMark = settings.getSideMarkText() == null ? "" : settings.getSideMarkText().trim();
         String serial = label.serialNumber();
         String purity = settings.isShowPurity() ? label.purityText() : null;
         List<String> details = detailLines(label);
@@ -108,6 +126,12 @@ public record LabelLayout(
         // The logo box is square, so it is as wide as it is tall.
         BigDecimal logoSize = useLogo ? settings.getShopLogoHeightMm() : BigDecimal.ZERO;
         BigDecimal shopW = shop.isEmpty() ? BigDecimal.ZERO : textWidthMm(shop, settings.getShopFontPt());
+        // Turned on its side, so its box is the other way round: as wide as one
+        // line is tall, and as tall as the string is long.
+        BigDecimal sideW = sideMark.isEmpty() ? BigDecimal.ZERO : lineHeightMm(settings.getShopFontPt());
+        BigDecimal sideH = sideMark.isEmpty()
+                ? BigDecimal.ZERO
+                : textWidthMm(sideMark, settings.getShopFontPt());
         BigDecimal serialW = textWidthMm(serial, settings.getSerialFontPt());
         BigDecimal purityW = purity == null ? BigDecimal.ZERO : textWidthMm(purity, settings.getPurityFontPt());
         BigDecimal identW = purity == null ? serialW : serialW.add(IDENT_GAP_MM).add(purityW);
@@ -117,27 +141,29 @@ public record LabelLayout(
         BigDecimal contentW = settings.getContentWidthMm().subtract(settings.getMarginLeftMm().multiply(TWO));
         BigDecimal contentH = settings.getContentHeightMm().subtract(settings.getMarginTopMm().multiply(TWO));
 
-        // The short name goes beside the bars when there is room, and above them
-        // when there is not. Narrowing the bars to make it fit is how a barcode
-        // stops scanning, so that is never an option.
+        // The side mark takes the strip before the bars when there is room for
+        // it, and is dropped when there is not. Narrowing the bars to make it
+        // fit is how a barcode stops scanning, so that is never an option.
         BigDecimal shopH = shop.isEmpty() ? BigDecimal.ZERO : lineHeightMm(settings.getShopFontPt());
-        boolean hasMark = !shop.isEmpty();
-        boolean shopBeside = hasMark
-                && shopW.add(INNER_GAP_MM).add(barsColumnW).compareTo(contentW) <= 0;
-        BigDecimal codeW = shopBeside ? shopW.add(INNER_GAP_MM).add(barsColumnW) : barsColumnW.max(shopW);
-        BigDecimal codeH = barcodeH.add(IDENT_TOP_MM).add(identH).add(shopBeside ? BigDecimal.ZERO : shopH);
+        boolean hasSideMark = !sideMark.isEmpty()
+                && sideW.add(INNER_GAP_MM).add(barsColumnW).compareTo(contentW) <= 0;
+        BigDecimal codeW = hasSideMark ? sideW.add(INNER_GAP_MM).add(barsColumnW) : barsColumnW;
+        BigDecimal codeH = barcodeH.add(IDENT_TOP_MM).add(identH);
 
         BigDecimal detailLineH = lineHeightMm(settings.getDetailFontPt());
         BigDecimal detailTextW = details.stream()
                 .map(line -> textWidthMm(line, settings.getDetailFontPt()))
                 .reduce(BigDecimal.ZERO, BigDecimal::max);
-        BigDecimal detailTextH = detailLineH.multiply(BigDecimal.valueOf(details.size()));
+        // The short name is the first line of this block, in its own font, so
+        // it is measured apart from the rest.
+        boolean hasShopLine = !shop.isEmpty();
+        BigDecimal detailTextH = detailLineH.multiply(BigDecimal.valueOf(details.size())).add(shopH);
         // The logo is the last thing in the detail column, under the size line.
-        BigDecimal detailW = detailTextW.max(logoSize);
+        BigDecimal detailW = detailTextW.max(shopW).max(logoSize);
         BigDecimal detailH = useLogo
                 ? detailTextH.add(details.isEmpty() ? BigDecimal.ZERO : LOGO_TOP_MM).add(logoSize)
                 : detailTextH;
-        boolean hasDetailBlock = !details.isEmpty() || useLogo;
+        boolean hasDetailBlock = hasShopLine || !details.isEmpty() || useLogo;
 
         // Side by side when both blocks fit across the tag. When they do not, the
         // details drop below the barcode - but only if the tag is deep enough to
@@ -160,17 +186,14 @@ public record LabelLayout(
         BigDecimal codeY = sideBySide
                 ? originY.add(totalH.subtract(codeH).divide(TWO, 3, RoundingMode.HALF_UP))
                 : originY;
-        BigDecimal barsColumnX = shopBeside ? originX.add(shopW).add(INNER_GAP_MM) : originX;
-        BigDecimal barsY = shopBeside ? codeY : codeY.add(shopH);
+        BigDecimal barsColumnX = hasSideMark ? originX.add(sideW).add(INNER_GAP_MM) : originX;
+        BigDecimal barsY = codeY;
         BigDecimal barsX = barsColumnX.add(barsColumnW.subtract(barcodeW).divide(TWO, 3, RoundingMode.HALF_UP));
 
-        if (hasMark) {
-            // Beside the bars it is centred against them; above them it takes the
-            // first line and the bars move down by its height.
-            BigDecimal shopY = shopBeside
-                    ? barsY.add(barcodeH.subtract(shopH).divide(TWO, 3, RoundingMode.HALF_UP))
-                    : codeY;
-            elements.add(new Text(shop, originX, shopY, settings.getShopFontPt(), true, Role.SHOP));
+        if (hasSideMark) {
+            // Centred against the bars, which is the tallest thing beside it.
+            BigDecimal sideY = barsY.add(barcodeH.subtract(sideH).divide(TWO, 3, RoundingMode.HALF_UP));
+            elements.add(new VerticalText(sideMark, originX, sideY, settings.getShopFontPt(), true));
         }
         elements.add(new Bars(barcodeModules, moduleMm, barsX, barsY, barcodeH));
 
@@ -187,9 +210,17 @@ public record LabelLayout(
             BigDecimal detailY = sideBySide
                     ? originY.add(totalH.subtract(detailH).divide(TWO, 3, RoundingMode.HALF_UP))
                     : codeY.add(codeH).add(IDENT_TOP_MM);
+            BigDecimal lineY = detailY;
+            if (hasShopLine) {
+                elements.add(new Text(shop, detailX, lineY, settings.getShopFontPt(), true, Role.SHOP));
+                lineY = lineY.add(shopH);
+            }
             for (int line = 0; line < details.size(); line++) {
+                // The description stays the bold one: it is what a jeweller
+                // reads first, and the short name above it is the same on every
+                // tag in the tray.
                 elements.add(new Text(details.get(line), detailX,
-                        detailY.add(detailLineH.multiply(BigDecimal.valueOf(line))),
+                        lineY.add(detailLineH.multiply(BigDecimal.valueOf(line))),
                         settings.getDetailFontPt(), line == 0, line == 0 ? Role.NAME : Role.DETAIL));
             }
             if (useLogo) {
@@ -215,6 +246,8 @@ public record LabelLayout(
             BigDecimal bottom = switch (element) {
                 case Bars bars -> bars.yMm().add(bars.heightMm());
                 case Text text -> text.yMm().add(lineHeightMm(text.fontPt()));
+                // Turned on its side, so its depth is the length of the string.
+                case VerticalText side -> side.yMm().add(textWidthMm(side.value(), side.fontPt()));
                 case Logo logo -> logo.yMm().add(logo.sizeMm());
             };
             lowest = lowest.max(bottom);

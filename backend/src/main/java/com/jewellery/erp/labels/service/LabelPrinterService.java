@@ -312,6 +312,8 @@ public class LabelPrinterService {
                 drawBars(cell, bars);
             } else if (element instanceof LabelLayout.Text text) {
                 drawText(cell, text);
+            } else if (element instanceof LabelLayout.VerticalText side) {
+                drawVerticalText(cell, side);
             } else if (element instanceof LabelLayout.Logo logo) {
                 drawLogo(cell, logo);
             }
@@ -365,6 +367,29 @@ public class LabelPrinterService {
         // The layout gives the top of the line; Java2D draws from the baseline.
         float baseline = (float) (mmToPoints(text.yMm()) + g.getFontMetrics().getAscent());
         g.drawString(text.value(), (float) mmToPoints(text.xMm()), baseline);
+    }
+
+    /**
+     * Text turned a quarter turn, reading upwards.
+     *
+     * <p>The layout gives the top-left of the box the text ends up in. Rotating
+     * about that corner would swing the string up out of the tag, so the origin
+     * moves down by the string's own length first - measured here rather than
+     * estimated, so it lands where the layout said it would.
+     *
+     * <p>On a copy of the context: a rotation left behind would turn everything
+     * drawn after it.
+     */
+    private static void drawVerticalText(Graphics2D g, LabelLayout.VerticalText text) {
+        Font font = new Font(FONT_FAMILY, text.bold() ? Font.BOLD : Font.PLAIN, 10)
+                .deriveFont(text.fontPt().floatValue());
+        Graphics2D turned = (Graphics2D) g.create();
+        turned.setFont(font);
+        double length = turned.getFontMetrics().stringWidth(text.value());
+        turned.translate(mmToPoints(text.xMm()), mmToPoints(text.yMm()) + length);
+        turned.rotate(-Math.PI / 2);
+        turned.drawString(text.value(), 0f, turned.getFontMetrics().getAscent());
+        turned.dispose();
     }
 
     private static double mmToPoints(BigDecimal mm) {

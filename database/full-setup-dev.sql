@@ -54,11 +54,11 @@
 --  ===========================================================================
 --
 --  The tables already exist, so Flyway must be told not to re-create them.
---  Start the backend once with a baseline at version 26:
+--  Start the backend once with a baseline at version 27:
 --
 --    mvn spring-boot:run -Dspring-boot.run.jvmArguments="\
 --      -Dspring.flyway.baseline-on-migrate=true \
---      -Dspring.flyway.baseline-version=26"
+--      -Dspring.flyway.baseline-version=27"
 --
 --  (start-backend.ps1 already passes these.) Flyway then records the schema as
 --  being at V24 and applies only later migrations.
@@ -1911,6 +1911,42 @@ ALTER TABLE customers
     ADD CONSTRAINT ck_customers_gstin
         CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{3}$');
 
+-- ---------------------------------------------------------------------------
+-- V27__label_side_mark.sql
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- V27: a second mark, printed standing up before the barcode.
+--
+-- The tag's head used to read  SJ |||||||||  BANGLE. The shop wants the short
+-- name over the description instead, where there is room for it, and the strip
+-- in front of the bars given to a second mark set on its side:
+--
+--     T                SJ
+--     K  |||||||||||   BANGLE
+--     S  001 24K/999   GMS.92.500
+--
+-- It is a column of its own rather than more text in the existing one because
+-- the strip before the bars is about 3 mm wide and nothing reads across it.
+-- Turned on its side, three characters fit comfortably in the 12 mm height.
+--
+-- Stored rather than hardcoded: the shop has changed its mind about what sits
+-- on the tag several times, and the short name beside it has been editable
+-- since the first version.
+-- ===========================================================================
+
+ALTER TABLE label_settings
+    ADD COLUMN side_mark_text VARCHAR(8) DEFAULT 'TKS';
+
+-- Empty is a real choice: it means nothing is printed in the strip and the
+-- barcode starts at the left margin, as it did before this migration.
+COMMENT ON COLUMN label_settings.side_mark_text IS
+    'Printed on its side before the barcode. Empty for nothing.';
+
+UPDATE label_settings
+   SET side_mark_text = 'TKS',
+       updated_by     = 'system'
+ WHERE id = 1;
+
 -- --- Demo shop details -----------------------------------------------------
 -- Printed at the top of every invoice and purchase bill. Placeholder values:
 -- correct them on the Shop Settings screen. GSTIN is deliberately left empty -
@@ -2120,5 +2156,5 @@ ORDER BY u.username;
 \echo '  used for anything real.'
 \echo ''
 \echo '  Start the backend ONCE with:'
-\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=26'
+\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=27'
 \echo '###########################################################################'
