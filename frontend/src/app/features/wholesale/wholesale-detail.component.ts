@@ -62,14 +62,14 @@ import { WholesaleApiService } from './wholesale-api.service';
               <tr>
                 <th>#</th>
                 <th>Serial</th>
-                <th>Jewel Name</th>
-                <th class="num">Jewell Wt</th>
+                <th>Item Name</th>
+                <th class="num">Item Weight</th>
                 <th class="num">Pure %</th>
                 <th class="num">Pure Wt</th>
                 <th class="num">Rate</th>
                 <th class="num">MC</th>
                 <th class="num">Stone</th>
-                <th class="num">Item Amount</th>
+                <th class="num">Amount</th>
               </tr>
             </thead>
             <tbody>

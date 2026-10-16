@@ -140,7 +140,7 @@ function toNumber(value: string): number | null {
                   <div class="line__head">
                     <span class="line__no">{{ i + 1 }}</span>
                     <span class="line__serial">{{ row.serial }}</span>
-                    <input class="input line__name" maxlength="200" placeholder="Jewel name"
+                    <input class="input line__name" maxlength="200" placeholder="Item name"
                            [value]="row.jewelName" (input)="patch(i, { jewelName: $any($event.target).value })" />
                     <button type="button" class="btn btn--ghost btn--icon" aria-label="Remove piece"
                             (click)="removeRow(i)">&times;</button>
@@ -151,7 +151,7 @@ function toNumber(value: string): number | null {
                   @if (row.lookup; as piece) {
                     <div class="inputs">
                       <div class="figure-cell">
-                        <span class="field__label">Jewel wt</span>{{ piece.jewelWeightGrams | weight }}
+                        <span class="field__label">Item weight</span>{{ piece.jewelWeightGrams | weight }}
                       </div>
                       <div class="field">
                         <label class="field__label field__label--required">Touch %</label>

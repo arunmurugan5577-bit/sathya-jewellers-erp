@@ -280,14 +280,14 @@ public class ReportDefinitions {
             text("customerName", "Party", 24),
             integer("lineNumber", "Line", false),
             text("serialNumber", "Serial", 10),
-            text("jewelName", "Jewel Name", 26),
-            weight("jewelWeightGrams", "Jewel Wt (g)", true),
+            text("jewelName", "Item Name", 26),
+            weight("jewelWeightGrams", "Item Weight (g)", true),
             money("purePercentage", "Touch %", false),
             weight("pureWeightGrams", "Pure Wt (g)", true),
             money("ratePerGram", "Rate / g", false),
             money("makingCharge", "Making", true),
             money("stoneAmount", "Stone", true),
-            money("itemAmount", "Item Amount", true),
+            money("itemAmount", "Amount", true),
             text("lineStatus", "Line Status", 11));
 
     private static final String WHOLESALE_ITEM_SQL = """
