@@ -35,16 +35,22 @@ public class SaleMapper {
                 defaultParticulars(item));
     }
 
-    /** "Ladies Ring" style: sub category then category, or the category alone. */
+    /**
+     * What the invoice calls the piece: its sub category, or its category when
+     * it has no sub category.
+     *
+     * <p>The two used to be run together - "Ladies Ring" from a Ladies sub
+     * category under a Ring category - which read well for rings and badly for
+     * everything whose sub category already says what the piece is. The shop
+     * asked for the sub category alone.
+     *
+     * <p>Only the starting point: the counter can type over it line by line,
+     * and whatever is typed is what the invoice keeps.
+     */
     public static String defaultParticulars(InventoryItem item) {
-        String category = item.getCategory().getName();
-        if (item.getSubCategory() == null) {
-            return category;
-        }
-        String subCategory = item.getSubCategory().getName();
-        return subCategory.toLowerCase().contains(category.toLowerCase())
-                ? subCategory
-                : subCategory + " " + category;
+        return item.getSubCategory() == null
+                ? item.getCategory().getName()
+                : item.getSubCategory().getName();
     }
 
     public SaleDtos.Line toPreviewLine(
