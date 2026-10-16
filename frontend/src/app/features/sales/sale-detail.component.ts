@@ -44,8 +44,11 @@ import { PaymentStatusBadgeComponent } from './status-badges.component';
             }
             @if (s.status !== 'CANCELLED') {
               <button *appHasPermission="permissions.SALES_DELETE" type="button" class="btn btn--danger" (click)="cancelOpen.set(true)">Cancel invoice</button>
-              <button *appHasPermission="permissions.SALES_DELETE" type="button" class="btn btn--danger" (click)="deleteOpen.set(true)">Delete invoice</button>
             }
+            <!-- Deleting is offered on a cancelled invoice too: cancelling is
+                 what a shop does to an invoice it must keep, and clearing out
+                 the ones it need not keep is the other half of that. -->
+            <button *appHasPermission="permissions.SALES_DELETE" type="button" class="btn btn--danger" (click)="deleteOpen.set(true)">Delete invoice</button>
           </app-page-header>
         </div>
 
@@ -128,10 +131,17 @@ import { PaymentStatusBadgeComponent } from './status-badges.component';
             <strong>This erases the invoice.</strong> It will not appear in the books, in a report or on
             a GST return - unlike cancelling, which keeps it on record.
           </p>
-          <p>
-            The pieces go back to stock and any old gold value back to its purchase bill, just as
-            cancelling does.
-          </p>
+          @if (s.status === 'CANCELLED') {
+            <p>
+              The pieces went back to stock when it was cancelled, and the old gold value with them.
+              Nothing further moves - only the record goes.
+            </p>
+          } @else {
+            <p>
+              The pieces go back to stock and any old gold value back to its purchase bill, just as
+              cancelling does.
+            </p>
+          }
           <p class="text-muted">
             {{ s.invoiceNumber }} is freed for the next sale if it was the last number issued. An older
             number stays spent, because issuing it again would put it behind invoices that already
