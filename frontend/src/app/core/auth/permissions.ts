@@ -79,6 +79,15 @@ export const Permissions = {
   /** Cancel a wholesale estimate. */
   WHOLESALE_DELETE: 'WHOLESALE_DELETE',
 
+  /** Open chits and see their balances. */
+  CHIT_VIEW: 'CHIT_VIEW',
+  /** Start a chit and record its instalments. */
+  CHIT_CREATE: 'CHIT_CREATE',
+  /** Mature a chit and redeem it. */
+  CHIT_EDIT: 'CHIT_EDIT',
+  /** Cancel or delete a chit. */
+  CHIT_DELETE: 'CHIT_DELETE',
+
   REPORT_WHOLESALE_VIEW: 'REPORT_WHOLESALE_VIEW',
   REPORT_WHOLESALE_EXPORT: 'REPORT_WHOLESALE_EXPORT',
 

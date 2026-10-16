@@ -330,6 +330,12 @@
   background: var(--info-soft);
 }
 
+/* Something is waiting on the shop rather than on the customer. */
+.badge--warning {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
 /* --- Toolbar / filters --------------------------------------------------- */
 .toolbar {
   display: flex;

@@ -121,6 +121,25 @@ export const routes: Routes = [
         canActivate: [permissionGuard(Permissions.OLD_METAL_VIEW)],
         loadComponent: () => import('./features/old-metal/old-metal-detail.component').then((m) => m.OldMetalDetailComponent),
       },
+      // --- Chits -----------------------------------------------------------
+      {
+        path: 'chits/new',
+        title: 'Start a chit - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.CHIT_CREATE)],
+        loadComponent: () => import('./features/chits/chit-open.component').then((m) => m.ChitOpenComponent),
+      },
+      {
+        path: 'chits',
+        title: 'Chits - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.CHIT_VIEW)],
+        loadComponent: () => import('./features/chits/chit-list.component').then((m) => m.ChitListComponent),
+      },
+      {
+        path: 'chits/:id',
+        title: 'Chit - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.CHIT_VIEW)],
+        loadComponent: () => import('./features/chits/chit-detail.component').then((m) => m.ChitDetailComponent),
+      },
       {
         path: 'customers',
         title: 'Customers - Jewellery ERP',

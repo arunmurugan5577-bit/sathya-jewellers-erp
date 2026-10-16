@@ -66,6 +66,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         permissions: [Permissions.WHOLESALE_VIEW],
       },
       { label: 'Old Gold / Silver', route: '/old-metal', icon: icons.coins, permissions: [Permissions.OLD_METAL_VIEW] },
+      { label: 'Chits', route: '/chits', icon: icons.coins, permissions: [Permissions.CHIT_VIEW] },
       { label: 'Customers', route: '/customers', icon: icons.person, permissions: [Permissions.CUSTOMER_VIEW] },
     ],
   },

@@ -69,9 +69,9 @@ import { WholesaleApiService } from './wholesale-api.service';
                     <td><a [routerLink]="['/wholesale', row.id]">{{ row.estimateNumber }}</a></td>
                     <td>{{ row.estimateDate }}</td>
                     <td>{{ row.customerName }}</td>
-                    <td class="num">{{ row.totalPureGrams | weight }} g</td>
+                    <td class="num">{{ row.totalPureGrams | weight }}</td>
                     <td class="num">{{ row.totalAmount | inr: 'whole' }}</td>
-                    <td class="num">{{ row.closingPureGrams | weight }} g</td>
+                    <td class="num">{{ row.closingPureGrams | weight }}</td>
                     <td class="num">{{ row.closingValue | inr: 'whole' }}</td>
                     <td>{{ row.status }}</td>
                   </tr>

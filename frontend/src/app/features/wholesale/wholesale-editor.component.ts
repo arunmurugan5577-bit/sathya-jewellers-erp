@@ -97,7 +97,7 @@ function toNumber(value: string): number | null {
               @if (calculation(); as calc) {
                 <div class="opening">
                   Opening balance
-                  <strong>{{ calc.totals.openingPureGrams | weight }} g</strong> pure
+                  <strong>{{ calc.totals.openingPureGrams | weight }}</strong> pure
                   @if (calc.totals.openingMiscAmount) {
                     &nbsp;+&nbsp;<strong>{{ calc.totals.openingMiscAmount | inr: 'whole' }}</strong>
                   }
@@ -206,14 +206,14 @@ function toNumber(value: string): number | null {
               }
               @if (calculation(); as calc) {
                 <dl class="sums">
-                  <dt>Total pure weight</dt><dd>{{ calc.totals.totalPureGrams | weight }} g</dd>
+                  <dt>Total pure weight</dt><dd>{{ calc.totals.totalPureGrams | weight }}</dd>
                   <dt>Making + stone</dt><dd>{{ calc.totals.totalMiscAmount | inr: 'whole' }}</dd>
                   <dt class="sums__grand">Estimate total</dt>
                   <dd class="sums__grand">{{ calc.totals.totalAmount | inr: 'whole' }}</dd>
                   <dd class="words">{{ calc.totals.totalAmountInWords }}</dd>
 
                   <dt class="sums__section">Closing pure</dt>
-                  <dd class="sums__section">{{ calc.totals.closingPureGrams | weight }} g</dd>
+                  <dd class="sums__section">{{ calc.totals.closingPureGrams | weight }}</dd>
                   <dt>Closing misc</dt><dd>{{ calc.totals.closingMiscAmount | inr: 'whole' }}</dd>
                   <dt class="sums__grand">Closing value</dt>
                   <dd class="sums__grand">{{ calc.totals.closingValue | inr: 'whole' }}</dd>
