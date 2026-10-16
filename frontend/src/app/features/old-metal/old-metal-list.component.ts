@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { Permissions } from '../../core/auth/permissions';
@@ -23,8 +23,17 @@ import { PaymentStatusBadgeComponent } from '../sales/status-badges.component';
   template: `
     <div class="stack">
       <app-page-header title="Old gold / silver" subtitle="Purchase bills for old metal bought from customers.">
+        <button type="button" class="btn" [disabled]="!canPrintRun()" (click)="printRun()">
+          Print all as PDF
+        </button>
         <a *appHasPermission="permissions.OLD_METAL_CREATE" class="btn btn--primary" routerLink="/old-metal/new">New purchase</a>
       </app-page-header>
+      @if (!canPrintRun()) {
+        <p class="text-muted hint">
+          Choose a From and To date to print every purchase bill between them as one document.
+          Cancelled bills are left out.
+        </p>
+      }
 
       <section class="card">
         <div class="toolbar">
@@ -87,6 +96,7 @@ export class OldMetalListComponent {
   protected readonly permissions = Permissions;
   protected readonly loading = signal(true);
   protected readonly page = signal<Page<OldMetalSummary>>(emptyPage<OldMetalSummary>());
+  private readonly router = inject(Router);
   private filters: DocumentFilters = {};
 
   constructor() {
@@ -114,8 +124,20 @@ export class OldMetalListComponent {
     this.search$.next((event.target as HTMLInputElement).value.trim());
   }
 
+  /** Both dates, or there is no run to print. */
+  protected readonly canPrintRun = signal(false);
+
+  protected printRun(): void {
+    const { from, to } = this.filters;
+    if (!from || !to) {
+      return;
+    }
+    void this.router.navigate(['/old-metal/print-run'], { queryParams: { startDate: from, endDate: to } });
+  }
+
   protected setFilter(key: keyof DocumentFilters, event: Event): void {
     this.filters = { ...this.filters, [key]: (event.target as HTMLInputElement).value || null };
+    this.canPrintRun.set(!!this.filters.from && !!this.filters.to);
     this.reload(0);
   }
 

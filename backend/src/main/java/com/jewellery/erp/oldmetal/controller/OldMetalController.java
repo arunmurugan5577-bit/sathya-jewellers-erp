@@ -113,6 +113,31 @@ public class OldMetalController {
         return ResponseEntity.ok(oldMetalService.updateRemarks(id, request.remarks()));
     }
 
+    @GetMapping("/for-printing")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.OLD_METAL_VIEW + "')")
+    @Operation(summary = "Every purchase bill of a date range, for printing as one run",
+            description = "Cancelled bills are left out. Capped at 200. Requires OLD_METAL_VIEW.")
+    public ResponseEntity<java.util.List<OldMetalDtos.Detail>> forPrinting(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate startDate,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate endDate) {
+        return ResponseEntity.ok(oldMetalService.findForPrinting(startDate, endDate));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.OLD_METAL_DELETE + "')")
+    @Operation(summary = "Delete a purchase bill",
+            description = "Erases the bill and its lines. Refused once any of its value has been applied to "
+                    + "a sale. The number is freed for the next bill when it was the last one issued. "
+                    + "Requires OLD_METAL_DELETE.")
+    public void delete(@PathVariable Long id) {
+        oldMetalService.delete(id);
+    }
+
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.OLD_METAL_DELETE + "')")
     @Operation(summary = "Cancel a purchase bill", description = "Allowed only while none of its value has been "

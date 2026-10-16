@@ -97,6 +97,13 @@ export const routes: Routes = [
           import('./features/wholesale/wholesale-detail.component').then((m) => m.WholesaleDetailComponent),
       },
       {
+        path: 'old-metal/print-run',
+        title: 'Print purchase bills - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.OLD_METAL_VIEW)],
+        loadComponent: () =>
+          import('./features/old-metal/old-metal-batch-print.component').then((m) => m.OldMetalBatchPrintComponent),
+      },
+      {
         path: 'old-metal/new',
         title: 'Old gold purchase - Jewellery ERP',
         canActivate: [permissionGuard(Permissions.OLD_METAL_CREATE)],

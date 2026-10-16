@@ -59,6 +59,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class OldMetalService {
 
     private static final Logger log = LoggerFactory.getLogger(OldMetalService.class);
+    /** One printing. Beyond this the browser, not the server, is the thing that struggles. */
+    private static final int MAX_BILLS_PER_PRINT = 200;
 
     private final OldMetalTransactionRepository repository;
     private final OldMetalMapper mapper;
@@ -184,6 +186,62 @@ public class OldMetalService {
         transaction.cancel(StringNormalizer.trimToNull(reason), currentUser(), Instant.now());
         log.info("Old metal purchase {} cancelled", transaction.getTransactionNumber());
         return mapper.toDetail(requireDetailed(id));
+    }
+
+    /**
+     * Erases a purchase bill, and gives its number back when it can.
+     *
+     * <p>Refused once any of its value has been applied to a sale, for the same
+     * reason cancelling is: the invoice that used it would be left pointing at
+     * a bill that no longer exists. Cancel that sale first, as the message
+     * says. A bill that was cancelled and never used can go.
+     *
+     * <p>Nothing of the shop's stock moves either way - an old gold purchase
+     * takes metal in, it does not take a piece off the shelf - so unlike a
+     * sale there is nothing to return.
+     */
+    @Transactional
+    public void delete(Long id) {
+        OldMetalTransaction transaction = lockOne(id);
+        if (transaction.getUsedAmount().signum() > 0) {
+            throw new StateConflictException(ErrorCode.OLD_METAL_ALREADY_USED,
+                    ("Purchase bill %s has been applied to a sale and cannot be deleted. "
+                            + "Cancel that sale first.").formatted(transaction.getTransactionNumber()));
+        }
+        String number = transaction.getTransactionNumber();
+        boolean numberFreed = documentNumberService.release(
+                DocumentSeries.OLD_METAL_PURCHASE, transaction.getTransactionDate(), number);
+
+        repository.delete(transaction);
+        repository.flush();
+        log.warn("Old metal purchase {} DELETED by {}: number {}", number, currentUser(),
+                numberFreed ? "freed for reuse" : "not reusable - it was not the last issued");
+    }
+
+    /**
+     * Every purchase bill of a date range, ready to print as one run.
+     *
+     * <p>Capped for the same reason the invoice run is: a shop that picks a
+     * year by accident should be told so, not left with a browser laying out
+     * hundreds of sheets.
+     */
+    public List<OldMetalDtos.Detail> findForPrinting(java.time.LocalDate from, java.time.LocalDate to) {
+        if (from == null || to == null) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "startDate",
+                    "Choose the dates to print between.");
+        }
+        if (to.isBefore(from)) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "endDate",
+                    "The end date is before the start date.");
+        }
+        List<OldMetalTransaction> found = repository.findForPrinting(
+                from, to, org.springframework.data.domain.Limit.of(MAX_BILLS_PER_PRINT + 1));
+        if (found.size() > MAX_BILLS_PER_PRINT) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "endDate",
+                    ("That range holds more than %d purchase bills, which is more than one document can "
+                            + "usefully hold. Print it in shorter runs.").formatted(MAX_BILLS_PER_PRINT));
+        }
+        return found.stream().map(mapper::toDetail).toList();
     }
 
     // ------------------------------------------------------------ for sales ---

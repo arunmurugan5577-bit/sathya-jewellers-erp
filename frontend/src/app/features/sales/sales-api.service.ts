@@ -99,6 +99,16 @@ export class OldMetalApiService {
     return this.api.post<OldMetalTransaction>('/old-metal-transactions', request, context);
   }
 
+  /** Every purchase bill of a date range, cancelled ones left out. */
+  forPrinting(startDate: string, endDate: string): Observable<OldMetalTransaction[]> {
+    return this.api.get<OldMetalTransaction[]>('/old-metal-transactions/for-printing', { startDate, endDate });
+  }
+
+  /** Erases the bill. Refused once its value has been applied to a sale. */
+  delete(id: number): Observable<void> {
+    return this.api.delete<void>(`/old-metal-transactions/${id}`);
+  }
+
   cancel(id: number, reason: string): Observable<OldMetalTransaction> {
     return this.api.post<OldMetalTransaction>(`/old-metal-transactions/${id}/cancel`, { reason });
   }

@@ -37,6 +37,23 @@ public interface OldMetalTransactionRepository
      * sales spending the same old gold: the second waits here, then re-reads the
      * reduced balance.
      */
+    /**
+     * Every purchase bill of a run, with the lines each one prints.
+     *
+     * <p>Cancelled bills are dropped in the query: they are not what the shop
+     * is printing, and fetching them to discard them would load their lines.
+     */
+    @EntityGraph(attributePaths = {"customer", "items", "items.itemType", "items.purity"})
+    @Query("""
+            select distinct t from OldMetalTransaction t
+            where t.status <> com.jewellery.erp.oldmetal.entity.OldMetalStatus.CANCELLED
+              and t.transactionDate >= :from and t.transactionDate <= :to
+            order by t.transactionNumber
+            """)
+    List<OldMetalTransaction> findForPrinting(
+            @Param("from") java.time.LocalDate from, @Param("to") java.time.LocalDate to,
+            org.springframework.data.domain.Limit limit);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from OldMetalTransaction t where t.id in :ids order by t.id")
     List<OldMetalTransaction> lockAllById(@Param("ids") Collection<Long> ids);
