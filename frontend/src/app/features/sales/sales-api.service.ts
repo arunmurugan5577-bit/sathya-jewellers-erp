@@ -139,6 +139,11 @@ export class SaleApiService {
     return this.api.post<Sale>(`/sales/${id}/payments`, request, context);
   }
 
+  /** Erases the invoice. The pieces come back to stock either way; see the service. */
+  delete(id: number): Observable<void> {
+    return this.api.delete<void>(`/sales/${id}`);
+  }
+
   cancel(id: number, reason: string): Observable<Sale> {
     return this.api.post<Sale>(`/sales/${id}/cancel`, { reason });
   }

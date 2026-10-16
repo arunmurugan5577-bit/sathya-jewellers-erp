@@ -28,6 +28,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -144,5 +147,20 @@ public class SaleController {
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public ResponseEntity<SaleDtos.Detail> cancel(@PathVariable Long id, @Valid @RequestBody CancelRequest request) {
         return ResponseEntity.ok(saleService.cancel(id, request.reason()));
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.SALES_DELETE + "')")
+    @Operation(summary = "Delete an invoice",
+            description = "Erases the invoice, its lines, payments and adjustments. The pieces go back to stock "
+                    + "and old gold / silver value back to its bills, exactly as cancelling does; unlike "
+                    + "cancelling, nothing is left in the books. The invoice number is freed for the next sale "
+                    + "when it was the last one issued, and left spent otherwise. Requires SALES_DELETE.")
+    @ApiResponse(responseCode = "204", description = "Deleted")
+    @ApiResponse(responseCode = "404", description = "INVOICE_NOT_FOUND",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    public void delete(@PathVariable Long id) {
+        saleService.delete(id);
     }
 }

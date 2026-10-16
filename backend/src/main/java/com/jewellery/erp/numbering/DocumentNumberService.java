@@ -81,6 +81,68 @@ public class DocumentNumberService {
         return number;
     }
 
+    /**
+     * Gives a number back, so the next document of the series takes it again.
+     *
+     * <p>Only the number that was issued last can be given back. The counter
+     * holds one figure - what to issue next - and that is enough to undo the
+     * most recent step and nothing else. Returning the number from the middle
+     * of a run would mean issuing it again later, out of order, behind
+     * documents that already carry higher numbers.
+     *
+     * <p>So deleting the invoice you have just raised frees its number, and
+     * deleting an older one leaves the number spent. The caller is told which
+     * happened rather than left to assume.
+     *
+     * <p>{@code MANDATORY} and {@code FOR UPDATE} for the same reason as
+     * {@link #next}: the decrement has to stand or fall with the delete that
+     * asked for it.
+     *
+     * @return true when the counter was wound back
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean release(DocumentSeries series, LocalDate documentDate, String number) {
+        Object[] config = loadSeries(series);
+        String prefix = (String) config[0];
+        String separator = config[1] == null ? "" : config[1].toString();
+        String periodFormat = (String) config[2];
+        int padWidth = ((Number) config[3]).intValue();
+        String periodKey = DocumentNumberFormat.periodKey(periodFormat, documentDate);
+
+        List<?> rows = entityManager.createNativeQuery("""
+                SELECT next_value FROM document_counters
+                WHERE series_code = :series AND period_key = :period
+                FOR UPDATE
+                """)
+                .setParameter("series", series.name())
+                .setParameter("period", periodKey)
+                .getResultList();
+        if (rows.isEmpty()) {
+            return false;
+        }
+        long next = ((Number) rows.get(0)).longValue();
+        if (next <= 1) {
+            return false;
+        }
+
+        // Rebuilt rather than parsed: the number is assembled from the series
+        // configuration, so the only safe way to ask "was this the last one"
+        // is to assemble it again and compare.
+        String lastIssued = DocumentNumberFormat.format(prefix, separator, periodKey, padWidth, next - 1);
+        if (!lastIssued.equals(number)) {
+            return false;
+        }
+
+        entityManager.createNativeQuery("""
+                UPDATE document_counters SET next_value = next_value - 1, updated_at = now()
+                WHERE series_code = :series AND period_key = :period
+                """)
+                .setParameter("series", series.name())
+                .setParameter("period", periodKey)
+                .executeUpdate();
+        return true;
+    }
+
     private Object[] loadSeries(DocumentSeries series) {
         @SuppressWarnings("unchecked")
         List<Object[]> rows = entityManager.createNativeQuery("""

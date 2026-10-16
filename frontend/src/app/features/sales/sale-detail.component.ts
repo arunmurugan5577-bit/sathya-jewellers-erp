@@ -44,6 +44,7 @@ import { PaymentStatusBadgeComponent } from './status-badges.component';
             }
             @if (s.status !== 'CANCELLED') {
               <button *appHasPermission="permissions.SALES_DELETE" type="button" class="btn btn--danger" (click)="cancelOpen.set(true)">Cancel invoice</button>
+              <button *appHasPermission="permissions.SALES_DELETE" type="button" class="btn btn--danger" (click)="deleteOpen.set(true)">Delete invoice</button>
             }
           </app-page-header>
         </div>
@@ -121,6 +122,38 @@ import { PaymentStatusBadgeComponent } from './status-badges.component';
         </app-modal>
       }
 
+      @if (deleteOpen()) {
+        <app-modal [title]="'Delete invoice ' + s.invoiceNumber" (closed)="deleteOpen.set(false)">
+          <p>
+            <strong>This erases the invoice.</strong> It will not appear in the books, in a report or on
+            a GST return - unlike cancelling, which keeps it on record.
+          </p>
+          <p>
+            The pieces go back to stock and any old gold value back to its purchase bill, just as
+            cancelling does.
+          </p>
+          <p class="text-muted">
+            {{ s.invoiceNumber }} is freed for the next sale if it was the last number issued. An older
+            number stays spent, because issuing it again would put it behind invoices that already
+            carry higher numbers.
+          </p>
+          <div class="field">
+            <label class="field__label field__label--required" for="confirmNumber">
+              Type {{ s.invoiceNumber }} to confirm
+            </label>
+            <input id="confirmNumber" class="input" autocomplete="off"
+                   (input)="deleteConfirm.set($any($event.target).value)" />
+          </div>
+          @if (dialogError()) { <div class="alert alert--error">{{ dialogError() }}</div> }
+          <ng-container modalActions>
+            <button type="button" class="btn btn--ghost" (click)="deleteOpen.set(false)">Keep invoice</button>
+            <button type="button" class="btn btn--danger"
+                    [disabled]="busy() || deleteConfirm().trim() !== s.invoiceNumber"
+                    (click)="remove(s)">Delete for good</button>
+          </ng-container>
+        </app-modal>
+      }
+
       @if (cancelOpen()) {
         <app-modal [title]="'Cancel invoice ' + s.invoiceNumber" (closed)="cancelOpen.set(false)">
           <p>The invoice stays on record marked CANCELLED. Its pieces return to stock and any old gold value returns to the purchase bill.</p>
@@ -157,6 +190,9 @@ export class SaleDetailComponent implements OnInit {
   protected readonly sale = signal<Sale | null>(null);
   protected readonly paymentOpen = signal(false);
   protected readonly cancelOpen = signal(false);
+  protected readonly deleteOpen = signal(false);
+  /** Typed back by the user, so a stray click cannot erase a bill. */
+  protected readonly deleteConfirm = signal('');
   protected readonly busy = signal(false);
   protected readonly dialogError = signal<string | null>(null);
   protected readonly payMethod = signal<PaymentMethod>('CASH');
@@ -202,6 +238,27 @@ export class SaleDetailComponent implements OnInit {
       'Payment recorded.',
       () => this.paymentOpen.set(false),
     );
+  }
+
+  protected remove(sale: Sale): void {
+    this.busy.set(true);
+    this.dialogError.set(null);
+    this.api.delete(sale.id).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.deleteOpen.set(false);
+        this.notifications.success(`Invoice ${sale.invoiceNumber} deleted.`);
+        void this.router.navigate(['/sales']);
+      },
+      error: (error: unknown) => {
+        this.busy.set(false);
+        this.dialogError.set(
+          error instanceof HttpErrorResponse && isApiError(error.error)
+            ? error.error.message
+            : 'Could not delete the invoice. Try again.',
+        );
+      },
+    });
   }
 
   protected cancel(sale: Sale): void {

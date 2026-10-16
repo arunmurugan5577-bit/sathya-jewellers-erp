@@ -320,6 +320,59 @@ public class SaleService {
         return mapper.toDetail(requireDetailed(id));
     }
 
+    /**
+     * Erases an invoice: the row and its lines, payments and adjustments go.
+     *
+     * <p>Different from {@link #cancel} in what is left behind. A cancelled
+     * invoice keeps its number and stays in the books, which is what the GST
+     * record needs. This removes it, and the number with it when the number can
+     * be given back - so a bill raised by mistake can be raised again under the
+     * same number rather than burning one.
+     *
+     * <p>Only the number issued last can be given back, so deleting the newest
+     * invoice frees its number and deleting an older one leaves a gap. Either
+     * way the stock comes home: whatever the lines took is returned, and old
+     * gold applied to the bill goes back to the purchase it came from. A
+     * cancelled invoice has already given both back, so its lines are skipped
+     * rather than credited twice.
+     */
+    @Transactional
+    public void delete(Long id) {
+        Sale sale = lock(id);
+        Sale detailed = requireDetailed(id);
+
+        Map<Long, BigDecimal> returning = new LinkedHashMap<>();
+        for (SaleItem line : detailed.getItems()) {
+            if (line.getLineStatus() == SaleItemStatus.ACTIVE) {
+                returning.merge(line.getInventoryItem().getId(), line.getNetWeightGrams(), BigDecimal::add);
+            }
+        }
+        Map<Long, BigDecimal> released = new LinkedHashMap<>();
+        for (SaleOldMetalAdjustment adjustment : detailed.getOldMetalAdjustments()) {
+            if (adjustment.getStatus() == AdjustmentStatus.ACTIVE) {
+                released.merge(adjustment.getOldMetalTransaction().getId(),
+                        adjustment.getAdjustmentAmount(), BigDecimal::add);
+            }
+        }
+        if (!returning.isEmpty()) {
+            inventoryItemService.returnToStock(returning);
+        }
+        if (!released.isEmpty()) {
+            oldMetalService.releaseUsage(released);
+        }
+
+        String number = sale.getInvoiceNumber();
+        boolean numberFreed =
+                documentNumberService.release(DocumentSeries.SALE_INVOICE, sale.getInvoiceDate(), number);
+
+        repository.delete(sale);
+        repository.flush();
+        log.warn("Sale {} DELETED by {}: {} piece(s) returned, {} old gold bill(s) released, number {}",
+                number, SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER),
+                returning.size(), released.size(),
+                numberFreed ? "freed for reuse" : "not reusable - it was not the last issued");
+    }
+
     // ------------------------------------------------------------- helpers ---
 
     private void assertAdjustmentsValid(
