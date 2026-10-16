@@ -122,6 +122,18 @@ public class WholesaleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(wholesaleService.create(request));
     }
 
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.WHOLESALE_DELETE + "')")
+    @Operation(summary = "Delete a wholesale estimate",
+            description = "Erases the estimate and its lines. The pieces go back to stock and the party's "
+                    + "account is reversed, exactly as cancelling does; unlike cancelling, nothing is left "
+                    + "in the books. An already cancelled estimate is only removed, since it has given both "
+                    + "back. The number is freed when it was the last issued. Requires WHOLESALE_DELETE.")
+    public void delete(@PathVariable Long id) {
+        wholesaleService.delete(id);
+    }
+
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.WHOLESALE_DELETE + "')")
     @Operation(

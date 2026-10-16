@@ -255,6 +255,57 @@ public class WholesaleService {
         return mapper.toDetail(requireDetailed(id), shopSettingsService.find());
     }
 
+    /**
+     * Erases an estimate, and gives its number back when it can.
+     *
+     * <p>Everything the estimate did is undone first, by the same reckoning
+     * {@link #cancel} uses: the pieces go back to stock, and the party's
+     * account comes back by exactly what this estimate added - not by a
+     * recomputation, because the rate may have moved since and the account
+     * must return to where it was, not to where today's rate would put it.
+     *
+     * <p>An estimate already cancelled has given both back, so it is only
+     * removed. Reversing a second time would credit the party with gold it
+     * never returned.
+     *
+     * <p>The number comes back only when it was the last one issued, on the
+     * rule the invoice series follows.
+     */
+    @Transactional
+    public void delete(Long id) {
+        WholesaleEstimate estimate = repository.lockById(id).orElseThrow(() ->
+                new ResourceNotFoundException("No wholesale estimate with id " + id + "."));
+        WholesaleEstimate detailed = requireDetailed(id);
+        boolean alreadyReversed = detailed.isCancelled();
+
+        if (!alreadyReversed) {
+            Map<Long, BigDecimal> returning = new LinkedHashMap<>();
+            for (WholesaleEstimateItem line : detailed.getItems()) {
+                if (line.getLineStatus() == WholesaleItemStatus.ACTIVE) {
+                    returning.merge(line.getInventoryItem().getId(), line.getJewelWeightGrams(), BigDecimal::add);
+                }
+            }
+            if (!returning.isEmpty()) {
+                inventoryItemService.returnToStock(returning);
+            }
+            WholesaleBalance balance = lockOrCreateBalance(detailed.getCustomer().getId());
+            balance.add(detailed.getTotalPureGrams().negate(), detailed.getTotalMiscAmount().negate());
+            balance.setUpdatedBy(SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER));
+        }
+
+        String number = estimate.getEstimateNumber();
+        boolean numberFreed = documentNumberService.release(
+                DocumentSeries.WHOLESALE_ESTIMATE, estimate.getEstimateDate(), number);
+
+        repository.delete(estimate);
+        repository.flush();
+        log.warn("Wholesale estimate {} DELETED by {}: {}, number {}", number,
+                SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER),
+                alreadyReversed ? "stock and account already reversed when it was cancelled"
+                        : "pieces returned and account reversed",
+                numberFreed ? "freed for reuse" : "not reusable - it was not the last issued");
+    }
+
     // --------------------------------------------------------------- read ---
 
     @Transactional(readOnly = true)

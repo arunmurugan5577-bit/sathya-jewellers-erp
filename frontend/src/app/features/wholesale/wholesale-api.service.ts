@@ -64,6 +64,11 @@ export class WholesaleApiService {
     return this.api.post<WholesaleEstimate>('/wholesale/estimates', request, context);
   }
 
+  /** Erases the estimate. Stock and the party's account are put back first. */
+  delete(id: number): Observable<void> {
+    return this.api.delete<void>(`/wholesale/estimates/${id}`);
+  }
+
   cancel(id: number, reason: string): Observable<WholesaleEstimate> {
     return this.api.post<WholesaleEstimate>(`/wholesale/estimates/${id}/cancel`, { reason });
   }

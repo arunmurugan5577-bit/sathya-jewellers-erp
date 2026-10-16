@@ -1,9 +1,12 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { NotificationService } from '../../core/services/notification.service';
 import { Permissions } from '../../core/auth/permissions';
+import { isApiError } from '../../shared/models/api-error.model';
 import { HasPermissionDirective } from '../../shared/directives/has-permission.directive';
+import { ModalComponent } from '../../shared/components/modal.component';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { WholesaleEstimate } from '../../shared/models/wholesale.model';
 import { InrPipe } from '../../shared/pipes/inr.pipe';
@@ -21,7 +24,7 @@ import { WholesaleApiService } from './wholesale-api.service';
   selector: 'app-wholesale-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PageHeaderComponent, HasPermissionDirective, InrPipe, WeightPipe],
+  imports: [RouterLink, PageHeaderComponent, ModalComponent, HasPermissionDirective, InrPipe, WeightPipe],
   template: `
     @if (estimate(); as e) {
       <div class="page">
@@ -110,9 +113,9 @@ import { WholesaleApiService } from './wholesale-api.service';
           }
         </div>
 
-        @if (e.status === 'COMPLETED') {
-          <section class="card no-print">
-            <div class="card__body">
+        <section class="card no-print">
+          <div class="card__body">
+            @if (e.status === 'COMPLETED') {
               <button type="button" class="btn btn--danger" *appHasPermission="permissions.WHOLESALE_DELETE"
                       [disabled]="cancelling()" (click)="cancel()">
                 {{ cancelling() ? 'Cancelling...' : 'Cancel estimate' }}
@@ -120,8 +123,46 @@ import { WholesaleApiService } from './wholesale-api.service';
               <p class="field__hint">
                 Cancelling returns the pieces to stock and reverses this estimate from the party's account.
               </p>
+            }
+            <!-- Offered on a cancelled estimate too: clearing out the ones the
+                 shop need not keep is the other half of cancelling. -->
+            <button type="button" class="btn btn--danger" *appHasPermission="permissions.WHOLESALE_DELETE"
+                    [disabled]="busy()" (click)="deleteOpen.set(true)">
+              Delete estimate
+            </button>
+            <p class="field__hint">
+              Deleting erases it altogether. {{ e.status === 'CANCELLED'
+                ? 'The pieces and the account went back when it was cancelled.'
+                : 'The pieces and the account go back first, exactly as cancelling does.' }}
+            </p>
+          </div>
+        </section>
+
+        @if (deleteOpen()) {
+          <app-modal [title]="'Delete ' + e.estimateNumber" (closed)="deleteOpen.set(false)">
+            <p>
+              <strong>This erases the estimate.</strong> It will not appear in the books or in a
+              report - unlike cancelling, which keeps it on record.
+            </p>
+            <p class="text-muted">
+              {{ e.estimateNumber }} is freed for the next estimate if it was the last number issued.
+              An older number stays spent.
+            </p>
+            <div class="field">
+              <label class="field__label field__label--required" for="confirmNumber">
+                Type {{ e.estimateNumber }} to confirm
+              </label>
+              <input id="confirmNumber" class="input" autocomplete="off"
+                     (input)="deleteConfirm.set($any($event.target).value)" />
             </div>
-          </section>
+            @if (deleteError()) { <div class="alert alert--error">{{ deleteError() }}</div> }
+            <ng-container modalActions>
+              <button type="button" class="btn btn--ghost" (click)="deleteOpen.set(false)">Keep estimate</button>
+              <button type="button" class="btn btn--danger"
+                      [disabled]="busy() || deleteConfirm().trim() !== e.estimateNumber"
+                      (click)="remove(e)">Delete for good</button>
+            </ng-container>
+          </app-modal>
         }
       </div>
     } @else {
@@ -157,6 +198,11 @@ export class WholesaleDetailComponent {
   protected readonly permissions = Permissions;
   protected readonly estimate = signal<WholesaleEstimate | null>(null);
   protected readonly cancelling = signal(false);
+  protected readonly deleteOpen = signal(false);
+  /** Typed back by the user, so a stray click cannot erase an estimate. */
+  protected readonly deleteConfirm = signal('');
+  protected readonly busy = signal(false);
+  protected readonly deleteError = signal<string | null>(null);
 
   constructor() {
     const id = Number(this.route.snapshot.paramMap.get('id'));
@@ -171,6 +217,27 @@ export class WholesaleDetailComponent {
 
   protected print(): void {
     window.print();
+  }
+
+  protected remove(estimate: WholesaleEstimate): void {
+    this.busy.set(true);
+    this.deleteError.set(null);
+    this.api.delete(estimate.id).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.deleteOpen.set(false);
+        this.notifications.success(`Estimate ${estimate.estimateNumber} deleted.`);
+        void this.router.navigate(['/wholesale']);
+      },
+      error: (err: unknown) => {
+        this.busy.set(false);
+        this.deleteError.set(
+          err instanceof HttpErrorResponse && isApiError(err.error)
+            ? err.error.message
+            : 'Could not delete the estimate. Try again.',
+        );
+      },
+    });
   }
 
   protected cancel(): void {
