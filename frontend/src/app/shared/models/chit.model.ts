@@ -42,6 +42,26 @@ export interface ChitPayment {
   createdBy: string;
 }
 
+export type RedemptionKind = 'CASH' | 'SALE';
+
+/** What became of a chit: taken as cash, or spent against an invoice. */
+export interface ChitRedemption {
+  id: number;
+  redeemedOn: string;
+  kind: RedemptionKind;
+  grams?: number | null;
+  ratePerGram?: number | null;
+  amount: number;
+  saleId?: number | null;
+  invoiceNumber?: string | null;
+  status: 'ACTIVE' | 'CANCELLED';
+  paymentMethod?: PaymentMethod | null;
+  referenceNo?: string | null;
+  remarks?: string | null;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface ChitAccount {
   id: number;
   chitNumber: string;
@@ -72,6 +92,7 @@ export interface ChitAccount {
   closeReason?: string | null;
   remarks?: string | null;
   payments: ChitPayment[];
+  redemptions: ChitRedemption[];
   createdAt: string;
   createdBy: string;
 }
@@ -104,6 +125,15 @@ export interface OpenChitRequest {
 /** The rate belongs on a gold chit only; the server refuses it on a money one. */
 export interface ChitPaymentRequest {
   paidOn?: string | null;
+  ratePerGram?: number | null;
+  paymentMethod?: PaymentMethod | null;
+  referenceNo?: string | null;
+  remarks?: string | null;
+}
+
+/** Taking the chit as cash. The whole balance goes and the chit closes. */
+export interface WithdrawChitRequest {
+  withdrawnOn?: string | null;
   ratePerGram?: number | null;
   paymentMethod?: PaymentMethod | null;
   referenceNo?: string | null;

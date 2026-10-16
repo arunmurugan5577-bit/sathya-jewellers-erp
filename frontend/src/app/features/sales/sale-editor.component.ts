@@ -12,7 +12,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, switchMap, catchError, of } from 'rxjs';
 
 import { SUPPRESS_ERROR_TOAST } from '../../core/interceptors/error.interceptor';
@@ -31,6 +31,8 @@ import {
 } from '../../shared/models/sales.model';
 import { InrPipe } from '../../shared/pipes/inr.pipe';
 import { WeightPipe } from '../../shared/pipes/weight.pipe';
+import { ChitSummary } from '../../shared/models/chit.model';
+import { ChitApiService } from '../chits/chit-api.service';
 import { CustomerPickerComponent } from '../customers/customer-picker.component';
 import { OldMetalApiService, SaleApiService } from './sales-api.service';
 
@@ -276,6 +278,73 @@ function toNumber(value: string): number | null {
             </section>
           }
 
+          <!-- Chits -->
+          @if (customer() && chitOptions().length) {
+            <section class="card">
+              <div class="card__header"><h2 class="card__title">Chit</h2></div>
+              <div class="card__body">
+                <p class="text-muted">
+                  A matured chit comes off the total. The jewellery is still taxed in full - the chit
+                  settles what is payable.
+                </p>
+                <div class="table-wrapper">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Chit</th>
+                        <th class="td--numeric">Holds</th>
+                        <th class="td--numeric">Use</th>
+                        <th class="td--numeric">Rate / g</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (option of chitOptions(); track option.id) {
+                        @let use = chits()[option.id];
+                        <tr>
+                          <td>
+                            <input type="checkbox" [checked]="use !== undefined" (change)="toggleChit(option)"
+                                   [attr.aria-label]="'Use ' + option.chitNumber" />
+                          </td>
+                          <td class="table__serial">{{ option.chitNumber }}</td>
+                          <td class="td--numeric">
+                            @if (option.schemeType === 'GOLD') {
+                              {{ option.balanceGrams | weight }}
+                            } @else {
+                              {{ option.balanceAmount | inr: 'whole' }}
+                            }
+                          </td>
+                          <td class="td--numeric">
+                            @if (use) {
+                              @if (option.schemeType === 'GOLD') {
+                                <input class="input numeric amount-input" type="number" min="0" step="0.001"
+                                       [max]="option.balanceGrams" [value]="use.grams"
+                                       (input)="setChit(option.id, { grams: $any($event.target).value })"
+                                       [attr.aria-label]="'Grams off ' + option.chitNumber" />
+                              } @else {
+                                <input class="input numeric amount-input" type="number" min="0" step="0.01"
+                                       [max]="option.balanceAmount" [value]="use.amount"
+                                       (input)="setChit(option.id, { amount: $any($event.target).value })"
+                                       [attr.aria-label]="'Amount off ' + option.chitNumber" />
+                              }
+                            }
+                          </td>
+                          <td class="td--numeric">
+                            @if (use && option.schemeType === 'GOLD') {
+                              <input class="input numeric amount-input" type="number" min="0" step="0.01"
+                                     [value]="use.rate" (input)="setChit(option.id, { rate: $any($event.target).value })"
+                                     [attr.aria-label]="'Gold rate for ' + option.chitNumber" />
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          }
+
           <!-- Payments -->
           <section class="card">
             <div class="card__header">
@@ -331,6 +400,9 @@ function toNumber(value: string): number | null {
                 <dd class="words">{{ calc.totals.grandTotalInWords }}</dd>
                 @if (calc.totals.oldMetalAdjustmentAmount > 0) {
                   <dt>Less old gold / silver</dt><dd>- {{ calc.totals.oldMetalAdjustmentAmount | inr }}</dd>
+                }
+                @if (calc.totals.chitAdjustmentAmount > 0) {
+                  <dt>Less chit</dt><dd>- {{ calc.totals.chitAdjustmentAmount | inr }}</dd>
                 }
                 @if (calc.totals.roundOffAmount !== 0) {
                   <dt>Round off</dt><dd>{{ calc.totals.roundOffAmount | inr }}</dd>
@@ -418,6 +490,10 @@ export class SaleEditorComponent {
   private readonly oldMetal = inject(OldMetalApiService);
   private readonly notifications = inject(NotificationService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly chitApi = inject(ChitApiService);
+  /** A chit to tick as soon as its customer's chits arrive. */
+  private preselectedChit: number | null = null;
   private readonly serialInputs = viewChildren<ElementRef<HTMLInputElement>>('serialInput');
   private readonly scanBox = viewChild<ElementRef<HTMLInputElement>>('scanBox');
   private readonly recalc$ = new Subject<void>();
@@ -435,6 +511,9 @@ export class SaleEditorComponent {
   protected readonly oldMetalOptions = signal<OldMetalOption[]>([]);
   /** Bill id -> amount typed, for the bills ticked. */
   protected readonly adjustments = signal<Record<number, string>>({});
+  protected readonly chitOptions = signal<ChitSummary[]>([]);
+  /** Chit id -> what to take off it, for the chits ticked. */
+  protected readonly chits = signal<Record<number, { amount: string; grams: string; rate: string }>>({});
 
   protected readonly calculation = signal<SaleCalculation | null>(null);
   protected readonly calculating = signal(false);
@@ -529,16 +608,44 @@ export class SaleEditorComponent {
         }
       });
 
-    // A new customer means different old gold bills.
+    // A new customer means different old gold bills, and different chits.
     effect(() => {
       const selected = this.customer();
       this.adjustments.set({});
       this.oldMetalOptions.set([]);
+      this.chits.set({});
+      this.chitOptions.set([]);
       if (selected) {
         this.oldMetal.usable(selected.id).subscribe((options) => this.oldMetalOptions.set(options));
+        this.chitApi
+          .list({ page: 0, size: 20 }, { customerId: selected.id, status: 'MATURED' })
+          .subscribe((page) => {
+            this.chitOptions.set(page.content);
+            // Arrived from "buy jewellery with it": tick that chit straight away.
+            const wanted = this.preselectedChit;
+            const option = wanted ? page.content.find((c) => c.id === wanted) : undefined;
+            if (option) {
+              this.preselectedChit = null;
+              this.toggleChit(option);
+            }
+          });
       }
       this.schedule();
     });
+
+    // The chit screen links here with the chit to spend.
+    const wanted = Number(this.route.snapshot.queryParamMap.get('chit'));
+    if (wanted) {
+      this.preselectedChit = wanted;
+      this.chitApi.findById(wanted).subscribe((chit) =>
+        this.customer.set({
+          id: chit.customerId,
+          customerCode: chit.customerCode,
+          fullName: chit.customerName,
+          mobileNumber: chit.customerMobile,
+        }),
+      );
+    }
 
     // The counter's first move is to scan, so the box is ready for a trigger pull.
     this.focusScanBox();
@@ -772,6 +879,28 @@ export class SaleEditorComponent {
     this.schedule();
   }
 
+  protected toggleChit(option: ChitSummary): void {
+    const current = { ...this.chits() };
+    if (current[option.id] !== undefined) {
+      delete current[option.id];
+    } else {
+      // Defaults to spending the chit in full, which is what a customer who
+      // has finished one usually wants to do.
+      current[option.id] = {
+        amount: option.schemeType === 'MONEY' ? String(option.balanceAmount) : '',
+        grams: option.schemeType === 'GOLD' ? String(option.balanceGrams) : '',
+        rate: option.schemeType === 'GOLD' ? String(toNumber(this.rows()[0]?.rate) ?? '') : '',
+      };
+    }
+    this.chits.set(current);
+    this.schedule();
+  }
+
+  protected setChit(id: number, patch: Partial<{ amount: string; grams: string; rate: string }>): void {
+    this.chits.update((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
+    this.schedule();
+  }
+
   protected setAdjustment(id: number, value: string): void {
     this.adjustments.update((current) => ({ ...current, [id]: value }));
     this.schedule();
@@ -849,6 +978,14 @@ export class SaleEditorComponent {
       oldMetalAdjustments: Object.entries(this.adjustments())
         .map(([id, amount]) => ({ transactionId: Number(id), amount: toNumber(amount) }))
         .filter((adjustment) => (adjustment.amount ?? 0) > 0),
+      chitRedemptions: Object.entries(this.chits())
+        .map(([id, use]) => {
+          const option = this.chitOptions().find((c) => c.id === Number(id));
+          return option?.schemeType === 'GOLD'
+            ? { chitAccountId: Number(id), grams: toNumber(use.grams), ratePerGram: toNumber(use.rate) }
+            : { chitAccountId: Number(id), amount: toNumber(use.amount) };
+        })
+        .filter((c) => (c.amount ?? 0) > 0 || ((c.grams ?? 0) > 0 && (c.ratePerGram ?? 0) > 0)),
       payments: this.payments()
         .filter((payment) => (toNumber(payment.amount) ?? 0) > 0)
         .map((payment) => ({

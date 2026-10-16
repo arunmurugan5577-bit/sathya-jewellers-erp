@@ -12,6 +12,7 @@ import {
   ChitSummary,
   MatureChitRequest,
   OpenChitRequest,
+  WithdrawChitRequest,
 } from '../../shared/models/chit.model';
 import { Page, PageQuery } from '../../shared/models/page.model';
 
@@ -66,6 +67,11 @@ export class ChitApiService {
   /** Adds the shop's twelfth month and hands the balance to the customer. */
   mature(id: number, request: MatureChitRequest, context?: HttpContext): Observable<ChitAccount> {
     return this.api.post<ChitAccount>(`/chits/${id}/mature`, request, context);
+  }
+
+  /** Pays the chit out. The whole balance goes and the chit closes. */
+  withdraw(id: number, request: WithdrawChitRequest, context?: HttpContext): Observable<ChitAccount> {
+    return this.api.post<ChitAccount>(`/chits/${id}/withdraw`, request, context);
   }
 
   cancel(id: number, reason: string): Observable<ChitAccount> {

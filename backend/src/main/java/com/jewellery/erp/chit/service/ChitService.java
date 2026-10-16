@@ -311,9 +311,17 @@ public class ChitService {
     public void delete(Long id) {
         ChitAccount account = lock(id);
         if (account.getStatus() == ChitStatus.CLOSED) {
+            // A chit closes either way it is redeemed, so the message has to
+            // say which: one is undone by deleting an invoice, the other is
+            // money already out of the drawer.
+            boolean onInvoice = account.getRedemptions().stream()
+                    .anyMatch(r -> r.isActive() && r.getKind() == RedemptionKind.SALE);
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                    ("Chit %s has been spent against an invoice and cannot be deleted. "
-                            + "Delete that invoice first.").formatted(account.getChitNumber()));
+                    onInvoice
+                            ? ("Chit %s has been spent against an invoice and cannot be deleted. "
+                                    + "Delete that invoice first.").formatted(account.getChitNumber())
+                            : "Chit %s has been paid out and cannot be deleted."
+                                    .formatted(account.getChitNumber()));
         }
         String number = account.getChitNumber();
         boolean numberFreed =

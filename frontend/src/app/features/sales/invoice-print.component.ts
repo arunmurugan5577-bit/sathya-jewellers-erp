@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 
 import { Sale } from '../../shared/models/sales.model';
 import { InrPipe } from '../../shared/pipes/inr.pipe';
+import { WeightPipe } from '../../shared/pipes/weight.pipe';
 
 /**
  * The TAX INVOICE as printed, laid out like the shop's paper receipt book:
@@ -16,7 +17,7 @@ import { InrPipe } from '../../shared/pipes/inr.pipe';
 @Component({
   selector: 'app-invoice-print',
   standalone: true,
-  imports: [InrPipe, DatePipe],
+  imports: [InrPipe, WeightPipe, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let s = sale();
@@ -96,10 +97,21 @@ import { InrPipe } from '../../shared/pipes/inr.pipe';
           @for (adjustment of activeAdjustments(); track adjustment.id) {
             <tr><td colspan="8" class="right">Less: Old gold / silver ({{ adjustment.transactionNumber }})</td><td>- {{ adjustment.adjustmentAmount | inr }}</td></tr>
           }
+          @for (chit of activeChits(); track chit.id) {
+            <tr>
+              <td colspan="8" class="right">
+                Less: Chit ({{ chit.chitNumber }})@if (chit.grams) {
+                  &nbsp;{{ chit.grams | weight }} at {{ chit.ratePerGram | inr: 'whole' }}
+                }
+              </td>
+              <td>- {{ chit.amount | inr }}</td>
+            </tr>
+          }
           @if (s.totals.roundOffAmount !== 0) {
             <tr><td colspan="8" class="right">Round off</td><td>{{ s.totals.roundOffAmount | inr }}</td></tr>
           }
-          @if (s.totals.oldMetalAdjustmentAmount > 0 || s.totals.roundOffAmount !== 0) {
+          @if (s.totals.oldMetalAdjustmentAmount > 0 || s.totals.chitAdjustmentAmount > 0
+               || s.totals.roundOffAmount !== 0) {
             <tr class="grand"><td colspan="8" class="right">NET PAYABLE</td><td>{{ s.totals.netPayable | inr }}</td></tr>
           }
         </tfoot>
@@ -233,6 +245,17 @@ export class InvoicePrintComponent {
 
   protected readonly activeAdjustments = computed(() =>
     this.sale().oldMetalAdjustments.filter((adjustment) => adjustment.status === 'ACTIVE' || this.sale().status === 'CANCELLED'),
+  );
+
+  /**
+   * The chits that settled this bill.
+   *
+   * <p>A cancelled invoice still shows them: the bill is kept as the record of
+   * what was issued, and what was issued had the chit on it, even though the
+   * value has since gone back to the customer.
+   */
+  protected readonly activeChits = computed(() =>
+    this.sale().chitRedemptions.filter((chit) => chit.status === 'ACTIVE' || this.sale().status === 'CANCELLED'),
   );
 
   /** "1.5%" when every line shares one GST rate - the usual case - otherwise blank. */

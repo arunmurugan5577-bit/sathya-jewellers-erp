@@ -192,6 +192,31 @@ export interface SaleLine {
   lineStatus: 'ACTIVE' | 'CANCELLED';
 }
 
+/** A matured chit put against an invoice. */
+export interface SaleChitRedemption {
+  id: number;
+  chitAccountId: number;
+  chitNumber: string;
+  schemeType: 'MONEY' | 'GOLD';
+  grams?: number | null;
+  ratePerGram?: number | null;
+  amount: number;
+  status: 'ACTIVE' | 'CANCELLED';
+}
+
+/**
+ * What to take off a chit on this invoice.
+ *
+ * <p>A money chit is spent in rupees; a gold chit in grams at today's rate,
+ * and its value follows from those. The server refuses the wrong one.
+ */
+export interface SaleChitRedemptionRequest {
+  chitAccountId: number;
+  amount?: number | null;
+  grams?: number | null;
+  ratePerGram?: number | null;
+}
+
 export interface SaleTotals {
   subtotal: number;
   cgstAmount: number;
@@ -200,6 +225,8 @@ export interface SaleTotals {
   discountAmount: number;
   grandTotal: number;
   oldMetalAdjustmentAmount: number;
+  /** Matured chit value put against this invoice. */
+  chitAdjustmentAmount: number;
   roundOffAmount: number;
   netPayable: number;
   amountPaid: number;
@@ -252,6 +279,7 @@ export interface Sale {
   items: SaleLine[];
   totals: SaleTotals;
   oldMetalAdjustments: SaleAdjustment[];
+  chitRedemptions: SaleChitRedemption[];
   payments: SalePayment[];
   remarks?: string | null;
   cancelReason?: string | null;
@@ -299,6 +327,7 @@ export interface SaleRequest {
   items: SaleItemRequest[];
   discountAmount?: number | null;
   oldMetalAdjustments?: { transactionId: number; amount: number | null }[];
+  chitRedemptions?: SaleChitRedemptionRequest[];
   payments?: SalePaymentRequest[];
   remarks?: string | null;
 }

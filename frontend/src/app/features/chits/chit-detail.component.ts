@@ -54,6 +54,14 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
               Add bonus &amp; mature
             </button>
           }
+          @if (c.status === 'MATURED') {
+            <a class="btn btn--primary" [routerLink]="['/sales/new']" [queryParams]="{ chit: c.id }">
+              Buy jewellery with it
+            </a>
+            <button *appHasPermission="permissions.CHIT_EDIT" type="button" class="btn" (click)="openWithdraw()">
+              Pay out as cash
+            </button>
+          }
           @if (c.status === 'ACTIVE' || c.status === 'COMPLETE') {
             <button *appHasPermission="permissions.CHIT_DELETE" type="button" class="btn btn--danger" (click)="cancelOpen.set(true)">
               Cancel chit
@@ -73,13 +81,41 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
 
         @if (c.status === 'COMPLETE') {
           <div class="alert alert--warning">
-            Every month the customer owes is in. The shop's twelfth is still to be added
-            @if (c.schemeType === 'GOLD') { , at the rate it buys at today }.
+            @if (c.schemeType === 'GOLD') {
+              Every month the customer owes is in. The shop's twelfth is still to be added, at the
+              rate it buys at today.
+            } @else {
+              Every month the customer owes is in. The shop's twelfth is still to be added.
+            }
+          </div>
+        }
+        @if (c.status === 'MATURED') {
+          <div class="alert alert--info">
+            The chit is the customer's to spend. They can buy jewellery with it - the chit comes off
+            the invoice and the jewellery is taxed as usual -
+            @if (c.schemeType === 'GOLD') {
+              or take the {{ c.balanceGrams | weight }} as cash, at today's rate.
+            } @else {
+              or take the {{ c.balanceAmount | inr: 'whole' }} as cash.
+            }
+          </div>
+        }
+        @if (c.status === 'CLOSED') {
+          <div class="alert alert--info">
+            @if (c.closeReason) {
+              {{ c.closeReason }}, in full, on {{ c.closedOn | date: 'dd MMM yyyy' }}.
+            } @else {
+              Spent in full on {{ c.closedOn | date: 'dd MMM yyyy' }}.
+            }
           </div>
         }
         @if (c.status === 'CANCELLED') {
           <div class="alert alert--warning">
-            Cancelled on {{ c.closedOn | date: 'dd MMM yyyy' }}@if (c.closeReason) { : {{ c.closeReason }} }.
+            @if (c.closeReason) {
+              Cancelled on {{ c.closedOn | date: 'dd MMM yyyy' }}: {{ c.closeReason }}
+            } @else {
+              Cancelled on {{ c.closedOn | date: 'dd MMM yyyy' }}.
+            }
             What was paid in is settled at the counter.
           </div>
         }
@@ -168,7 +204,109 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
             </div>
           }
         </section>
+        @if (c.redemptions.length) {
+          <section class="card">
+            <div class="card__body">
+              <h2 class="card__title">Where it went</h2>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Taken as</th>
+                    @if (c.schemeType === 'GOLD') {
+                      <th class="num">Gold</th>
+                      <th class="num">Rate / g</th>
+                    }
+                    <th class="num">Value</th>
+                    <th>Taken by</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (out of c.redemptions; track out.id) {
+                    <tr [class.row--reversed]="out.status === 'CANCELLED'">
+                      <td>{{ out.redeemedOn | date: 'dd MMM yyyy' }}</td>
+                      <td>
+                        @if (out.kind === 'SALE') {
+                          <a [routerLink]="['/sales', out.saleId]">{{ out.invoiceNumber }}</a>
+                        } @else {
+                          Cash{{ out.paymentMethod && out.paymentMethod !== 'CASH' ? ' (' + out.paymentMethod + ')' : '' }}
+                        }
+                        @if (out.status === 'CANCELLED') {
+                          <span class="badge badge--muted">Put back</span>
+                        }
+                      </td>
+                      @if (c.schemeType === 'GOLD') {
+                        <td class="num">{{ out.grams | weight }}</td>
+                        <td class="num">{{ out.ratePerGram | inr: 'whole' }}</td>
+                      }
+                      <td class="num">{{ out.amount | inr: 'whole' }}</td>
+                      <td class="text-muted">{{ out.createdBy }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
       </div>
+
+      @if (withdrawOpen()) {
+        <app-modal [title]="'Pay out ' + c.chitNumber" (closed)="withdrawOpen.set(false)">
+          <p>
+            @if (c.schemeType === 'GOLD') {
+              The customer takes the money instead of the gold. Their
+              <strong>{{ c.balanceGrams | weight }}</strong> is sold at the rate below, and the chit closes.
+            } @else {
+              The customer takes <strong>{{ c.balanceAmount | inr: 'whole' }}</strong> and the chit closes.
+            }
+          </p>
+          <div class="form-grid">
+            <div class="field">
+              <label class="field__label" for="withdrawnOn">Paid out on</label>
+              <input id="withdrawnOn" class="input" type="date" [value]="withdrawnOn()" [max]="today"
+                     (change)="withdrawnOn.set($any($event.target).value)" />
+            </div>
+            @if (c.schemeType === 'GOLD') {
+              <div class="field">
+                <label class="field__label field__label--required" for="outRate">Today's gold rate per gram</label>
+                <input id="outRate" class="input" type="number" min="0.01" step="0.01" inputmode="decimal"
+                       [value]="rate()" (input)="rate.set($any($event.target).value)" />
+                <p class="field__hint">
+                  @if (cashPreview(c); as value) {
+                    {{ c.balanceGrams | weight }} comes to {{ value | inr: 'whole' }} at this rate.
+                  } @else {
+                    What the gold fetches today, which is what the customer is paid.
+                  }
+                </p>
+              </div>
+            }
+            <div class="field">
+              <label class="field__label" for="outMethod">Paid by</label>
+              <select id="outMethod" class="select" (change)="method.set($any($event.target).value)">
+                @for (option of paymentMethods; track option.value) {
+                  <option [value]="option.value" [selected]="method() === option.value">{{ option.label }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label class="field__label" for="outReference">Reference</label>
+              <input id="outReference" class="input" maxlength="100" [value]="reference()"
+                     (input)="reference.set($any($event.target).value)" />
+            </div>
+          </div>
+          @if (error()) { <div class="alert alert--error">{{ error() }}</div> }
+          <ng-container modalActions>
+            <button type="button" class="btn btn--ghost" (click)="withdrawOpen.set(false)">Cancel</button>
+            <button type="button" class="btn btn--primary" [disabled]="busy() || !payReady(c)" (click)="withdraw(c)">
+              Pay out
+              @if (c.schemeType !== 'GOLD') { {{ c.balanceAmount | inr: 'whole' }} }
+              @else if (cashPreview(c); as value) { {{ value | inr: 'whole' }} }
+            </button>
+          </ng-container>
+        </app-modal>
+      }
 
       @if (payOpen()) {
         <app-modal [title]="'Month ' + (c.paidInstalments + 1) + ' of ' + c.payableInstalments" (closed)="payOpen.set(false)">
@@ -324,6 +462,7 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
       .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-3); }
       .num { text-align: right; font-variant-numeric: tabular-nums; }
       .row--shop td { background: var(--surface-sunken); }
+      .row--reversed td { color: var(--text-muted); text-decoration: line-through; }
       .table-wrap { overflow-x: auto; }
     `,
   ],
@@ -343,12 +482,14 @@ export class ChitDetailComponent implements OnInit {
   protected readonly error = signal<string | null>(null);
 
   protected readonly payOpen = signal(false);
+  protected readonly withdrawOpen = signal(false);
   protected readonly matureOpen = signal(false);
   protected readonly cancelOpen = signal(false);
   protected readonly deleteOpen = signal(false);
   protected readonly deleteConfirm = signal('');
 
   protected readonly paidOn = signal(this.today);
+  protected readonly withdrawnOn = signal(this.today);
   protected readonly maturedOn = signal(this.today);
   protected readonly rate = signal('');
   protected readonly method = signal<PaymentMethod>('CASH');
@@ -393,6 +534,43 @@ export class ChitDetailComponent implements OnInit {
   protected openMature(): void {
     this.resetForm();
     this.matureOpen.set(true);
+  }
+
+  protected openWithdraw(): void {
+    this.resetForm();
+    this.withdrawOpen.set(true);
+  }
+
+  /** What a gold chit's balance fetches at the rate typed in, before paying it out. */
+  protected cashPreview(chit: ChitAccount): number | null {
+    const rate = Number(this.rate());
+    if (chit.schemeType !== 'GOLD' || !Number.isFinite(rate) || rate <= 0) {
+      return null;
+    }
+    return Math.round(chit.balanceGrams * rate);
+  }
+
+  protected withdraw(chit: ChitAccount): void {
+    this.busy.set(true);
+    this.error.set(null);
+    this.api
+      .withdraw(chit.id, {
+        withdrawnOn: this.withdrawnOn() || null,
+        ratePerGram: chit.schemeType === 'GOLD' ? Number(this.rate()) : null,
+        paymentMethod: this.method(),
+        referenceNo: this.reference().trim() || null,
+      })
+      .subscribe({
+        next: (updated) => {
+          this.busy.set(false);
+          this.withdrawOpen.set(false);
+          this.chit.set(updated);
+          this.notifications.success(
+            `${updated.chitNumber} paid out and closed.`,
+          );
+        },
+        error: (err: unknown) => this.fail(err, 'Could not pay the chit out. Try again.'),
+      });
   }
 
   protected payReady(chit: ChitAccount): boolean {
@@ -487,6 +665,7 @@ export class ChitDetailComponent implements OnInit {
     this.method.set('CASH');
     this.paidOn.set(this.today);
     this.maturedOn.set(this.today);
+    this.withdrawnOn.set(this.today);
   }
 
   private reload(id: number, redirectOnFailure = false): void {
