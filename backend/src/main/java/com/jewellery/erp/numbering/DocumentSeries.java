@@ -6,5 +6,6 @@ public enum DocumentSeries {
     OLD_METAL_PURCHASE,
     CUSTOMER,
     WHOLESALE_ESTIMATE,
-    INVENTORY_SERIAL
+    INVENTORY_SERIAL,
+    CHIT_ACCOUNT
 }
