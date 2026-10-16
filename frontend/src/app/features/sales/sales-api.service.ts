@@ -139,6 +139,11 @@ export class SaleApiService {
     return this.api.post<Sale>(`/sales/${id}/payments`, request, context);
   }
 
+  /** Every invoice of a date range, cancelled ones left out, for printing as one run. */
+  forPrinting(startDate: string, endDate: string): Observable<Sale[]> {
+    return this.api.get<Sale[]>('/sales/for-printing', { startDate, endDate });
+  }
+
   /** Erases the invoice. The pieces come back to stock either way; see the service. */
   delete(id: number): Observable<void> {
     return this.api.delete<void>(`/sales/${id}`);

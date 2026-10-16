@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -71,6 +72,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SaleService {
 
     private static final Logger log = LoggerFactory.getLogger(SaleService.class);
+    /** One printing. Beyond this the browser, not the server, is the thing that struggles. */
+    private static final int MAX_INVOICES_PER_PRINT = 200;
 
     private final SaleRepository repository;
     private final SaleMapper mapper;
@@ -153,6 +156,35 @@ public class SaleService {
                     particulars(request.items().get(i), pieces.get(i)), result.lines().get(i)));
         }
         return new SaleDtos.Calculation(lines, mapper.toTotals(result));
+    }
+
+    /**
+     * Every invoice of a date range, ready to be printed as one run.
+     *
+     * <p>Cancelled invoices are left out: a cancelled bill is kept as a record,
+     * not reprinted into a customer's file. Deleted ones are not here to leave
+     * out.
+     *
+     * <p>Capped. A shop that asks for a year by accident should get a plain
+     * refusal rather than a browser trying to lay out two thousand A4 pages
+     * and giving up halfway, which looks like a fault in the application.
+     */
+    public List<SaleDtos.Detail> findForPrinting(LocalDate from, LocalDate to) {
+        if (from == null || to == null) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "startDate",
+                    "Choose the dates to print between.");
+        }
+        if (to.isBefore(from)) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "endDate",
+                    "The end date is before the start date.");
+        }
+        List<Sale> found = repository.findForPrinting(from, to, Limit.of(MAX_INVOICES_PER_PRINT + 1));
+        if (found.size() > MAX_INVOICES_PER_PRINT) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "endDate",
+                    ("That range holds more than %d invoices, which is more than one document can "
+                            + "usefully hold. Print it in shorter runs.").formatted(MAX_INVOICES_PER_PRINT));
+        }
+        return found.stream().map(mapper::toDetail).toList();
     }
 
     // ------------------------------------------------------------ commands ---

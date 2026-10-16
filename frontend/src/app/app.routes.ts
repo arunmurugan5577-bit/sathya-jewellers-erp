@@ -50,6 +50,13 @@ export const routes: Routes = [
 
       // --- Sales -----------------------------------------------------------
       {
+        path: 'sales/print-run',
+        title: 'Print invoices - Jewellery ERP',
+        canActivate: [permissionGuard(Permissions.SALES_VIEW)],
+        loadComponent: () =>
+          import('./features/sales/invoice-batch-print.component').then((m) => m.InvoiceBatchPrintComponent),
+      },
+      {
         path: 'sales/new',
         title: 'New sale - Jewellery ERP',
         canActivate: [permissionGuard(Permissions.SALES_CREATE)],

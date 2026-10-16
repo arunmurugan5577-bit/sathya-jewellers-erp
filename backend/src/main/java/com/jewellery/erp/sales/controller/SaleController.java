@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
+import java.util.List;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -80,6 +81,17 @@ public class SaleController {
     })
     public ResponseEntity<SaleDtos.ItemLookup> lookupItem(@PathVariable String serialNumber) {
         return ResponseEntity.ok(saleService.lookupItem(serialNumber));
+    }
+
+    @GetMapping("/for-printing")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.SALES_VIEW + "')")
+    @Operation(summary = "Every invoice of a date range, for printing as one run",
+            description = "Cancelled invoices are left out. Capped at 200 invoices; a longer range is "
+                    + "refused rather than half printed. Requires SALES_VIEW.")
+    public ResponseEntity<List<SaleDtos.Detail>> forPrinting(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ResponseEntity.ok(saleService.findForPrinting(startDate, endDate));
     }
 
     @PostMapping("/calculate")
