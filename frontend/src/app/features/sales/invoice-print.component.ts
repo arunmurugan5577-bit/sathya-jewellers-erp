@@ -150,19 +150,25 @@ import { InrPipe } from '../../shared/pipes/inr.pipe';
         position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-20deg);
         font-size: 64px; font-weight: 800; color: rgba(180, 0, 0, 0.18); letter-spacing: 0.1em; pointer-events: none;
       }
-      .invoice__seller { display: flex; gap: 14px; align-items: center; justify-content: center; text-align: center; border-bottom: 2px solid #7a1f2b; padding-bottom: 8px; }
+      /*
+       * The sheet breathes on its own measurements, in millimetres, because
+       * that is what it is printed in. 12 mm of air above the shop name on top
+       * of the 10 mm page margin: a bill that starts hard against the top edge
+       * reads as a slip, not as a document.
+       */
+      .invoice__seller { display: flex; gap: 14px; align-items: center; justify-content: center; text-align: center; border-bottom: 2px solid #7a1f2b; margin-top: 12mm; padding-bottom: 5mm; }
       .invoice__seller p { margin: 0; }
       .invoice__logo { width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0; }
       .invoice__shop { margin: 0; font-size: 25px; color: #7a1f2b; letter-spacing: 0.04em; text-transform: uppercase; }
       /* On its own line: a GSTIN is 15 characters and crowds the phone number
          when the two share one. */
       .gstin { display: block; margin-top: 2px; font-weight: 600; letter-spacing: 0.03em; }
-      .invoice__title { text-align: center; margin: 8px auto; font-weight: 700; letter-spacing: 0.2em; background: #7a1f2b; color: #fff; width: fit-content; padding: 3px 18px; border-radius: 3px; }
-      .invoice__meta { display: flex; justify-content: space-between; gap: 16px; margin: 10px 0; }
+      .invoice__title { text-align: center; margin: 7mm auto; font-weight: 700; letter-spacing: 0.2em; background: #7a1f2b; color: #fff; width: fit-content; padding: 4px 18px; border-radius: 3px; }
+      .invoice__meta { display: flex; justify-content: space-between; gap: 16px; margin: 0 0 7mm; }
       .invoice__number { text-align: right; white-space: nowrap; }
       .label { color: #6b5f50; }
       .invoice__lines { width: 100%; border-collapse: collapse; }
-      .invoice__lines th, .invoice__lines td { border: 1px solid #bfb3a0; padding: 5px 6px; text-align: right; font-variant-numeric: tabular-nums; vertical-align: top; }
+      .invoice__lines th, .invoice__lines td { border: 1px solid #bfb3a0; padding: 2.2mm 2mm; text-align: right; font-variant-numeric: tabular-nums; vertical-align: top; }
       .invoice__lines th { background: #f3ece0; text-align: center; font-weight: 600; }
       .invoice__lines .left { text-align: left; }
       .invoice__lines .center { text-align: center; }
@@ -171,9 +177,11 @@ import { InrPipe } from '../../shared/pipes/inr.pipe';
       .invoice__lines .sub { font-size: 10px; color: #6b5f50; }
       .invoice__lines tfoot td { border-top: 0; }
       .invoice__lines tr.grand td { font-weight: 800; font-size: 13px; background: #f3ece0; }
-      .invoice__words { margin: 8px 0 0; }
+      /* The group sits clear of the table; the lines within it stay together. */
+      .invoice__words { margin: 2mm 0 0; }
+      .invoice__words:first-of-type { margin-top: 7mm; }
       /* Never shrinks below nothing, so a long invoice still pages properly. */
-      .invoice__fill { flex: 1 1 auto; min-height: 16mm; }
+      .invoice__fill { flex: 1 1 auto; min-height: 22mm; }
       .invoice__sign { display: flex; justify-content: flex-end; font-weight: 600; }
       /* Room to actually sign above the line. */
       .invoice__sign > div { border-top: 1px solid #bfb3a0; padding-top: 4px; min-width: 55mm; text-align: center; }
