@@ -247,11 +247,6 @@ public class OldMetalService {
                     "%s cannot be bought as old metal. Allowed: %s."
                             .formatted(itemType.getName(), String.join(", ", allowedItemTypeCodes)));
         }
-        if (line.grossWeightGrams() != null && line.grossWeightGrams().compareTo(line.netWeightGrams()) < 0) {
-            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "grossWeightGrams",
-                    "Gross weight cannot be less than net weight.");
-        }
-
         OldMetalTransactionItem item = new OldMetalTransactionItem();
         item.setLineNumber(lineNumber);
         item.setItemType(itemType);

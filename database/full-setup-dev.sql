@@ -54,11 +54,11 @@
 --  ===========================================================================
 --
 --  The tables already exist, so Flyway must be told not to re-create them.
---  Start the backend once with a baseline at version 27:
+--  Start the backend once with a baseline at version 28:
 --
 --    mvn spring-boot:run -Dspring-boot.run.jvmArguments="\
 --      -Dspring.flyway.baseline-on-migrate=true \
---      -Dspring.flyway.baseline-version=27"
+--      -Dspring.flyway.baseline-version=28"
 --
 --  (start-backend.ps1 already passes these.) Flyway then records the schema as
 --  being at V24 and applies only later migrations.
@@ -1947,6 +1947,33 @@ UPDATE label_settings
        updated_by     = 'system'
  WHERE id = 1;
 
+-- ---------------------------------------------------------------------------
+-- V28__old_metal_gross_may_be_lower.sql
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- V28: old gold's two weights are not ordered.
+--
+-- V9 assumed what the words usually mean - gross is everything on the scale,
+-- net is what is left after the stones come out - and so required
+-- gross >= net. The shop does not use them that way. It writes down what the
+-- piece weighed as it came in, and then the weight the two parties settle on
+-- after a deduction for solder and wear, and that second figure is the smaller
+-- one. It is also the one the bill is paid on: the amount has been gross x rate
+-- since the shop corrected it.
+--
+-- So the ordering goes. Both weights must still be real weights - positive, and
+-- the check on net is untouched - but which of them is larger is the shop's
+-- business and not a rule the database can state.
+-- ===========================================================================
+
+ALTER TABLE old_metal_transaction_items
+    DROP CONSTRAINT ck_old_metal_items_gross,
+    ADD CONSTRAINT ck_old_metal_items_gross
+        CHECK (gross_weight_grams IS NULL OR gross_weight_grams > 0);
+
+COMMENT ON COLUMN old_metal_transaction_items.gross_weight_grams IS
+    'The weight the bill is paid on. May be under the net weight: the shop deducts for solder and wear.';
+
 -- --- Demo shop details -----------------------------------------------------
 -- Printed at the top of every invoice and purchase bill. Placeholder values:
 -- correct them on the Shop Settings screen. GSTIN is deliberately left empty -
@@ -2156,5 +2183,5 @@ ORDER BY u.username;
 \echo '  used for anything real.'
 \echo ''
 \echo '  Start the backend ONCE with:'
-\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=27'
+\echo '    -Dspring.flyway.baseline-on-migrate=true -Dspring.flyway.baseline-version=28'
 \echo '###########################################################################'
