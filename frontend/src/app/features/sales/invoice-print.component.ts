@@ -185,7 +185,17 @@ import { InrPipe } from '../../shared/pipes/inr.pipe';
       .invoice__sign { display: flex; justify-content: flex-end; font-weight: 600; }
       /* Room to actually sign above the line. */
       .invoice__sign > div { border-top: 1px solid #bfb3a0; padding-top: 4px; min-width: 55mm; text-align: center; }
-      @media (max-width: 900px) {
+      /*
+       * "screen and", and it matters more than it looks.
+       *
+       * A width query is measured against the page when printing, not against
+       * the window, and A4 is 210 mm - about 794 px. Without "screen and" this
+       * phone fallback matched on paper: the sheet lost its A4 size, the table
+       * went to display:block, and the customer and invoice-number blocks
+       * stacked instead of sitting either side. The printed bill came out
+       * laid out like a phone.
+       */
+      @media screen and (max-width: 900px) {
         /* A phone cannot show 210 mm, so the sheet stops pretending to be one. */
         .invoice { width: auto; min-height: 0; padding: 12px; }
         .invoice__lines { display: block; overflow-x: auto; }
@@ -194,10 +204,20 @@ import { InrPipe } from '../../shared/pipes/inr.pipe';
         .invoice__fill { display: none; }
       }
 
+      /*
+       * Paper states its own layout rather than inheriting whatever the screen
+       * rules happened to leave behind. The sheet is the one place in the
+       * application where the rendering cannot be looked at before it is sent,
+       * so it does not rely on another block not matching.
+       */
       @media print {
         /* @page already supplies the 10 mm margin, so the sheet adds none of
            its own and simply fills what is left. */
         .invoice { border: 0; width: auto; min-height: 100%; padding: 0; }
+        .invoice__meta { display: flex; flex-direction: row; justify-content: space-between; }
+        .invoice__number { text-align: right; }
+        .invoice__lines { display: table; width: 100%; overflow: visible; }
+        .invoice__fill { display: block; }
         /* A bill long enough to run over carries its column headings on to the
            next sheet, and no row is split down the middle. */
         .invoice__lines thead { display: table-header-group; }
