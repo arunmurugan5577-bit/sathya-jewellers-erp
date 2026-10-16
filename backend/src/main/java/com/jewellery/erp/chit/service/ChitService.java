@@ -3,6 +3,8 @@ package com.jewellery.erp.chit.service;
 import com.jewellery.erp.chit.dto.ChitDtos;
 import com.jewellery.erp.chit.entity.ChitAccount;
 import com.jewellery.erp.chit.entity.ChitPayment;
+import com.jewellery.erp.chit.entity.ChitRedemption;
+import com.jewellery.erp.chit.entity.RedemptionKind;
 import com.jewellery.erp.chit.entity.ChitScheme;
 import com.jewellery.erp.chit.entity.ChitSchemeType;
 import com.jewellery.erp.chit.entity.ChitStatus;
@@ -221,6 +223,53 @@ public class ChitService {
     }
 
     /**
+     * The customer takes the chit as cash.
+     *
+     * <p>The whole balance goes and the chit closes: a withdrawal is not a
+     * part payment, it is the customer finishing with the chit. A gold chit is
+     * valued at the rate given here, which is the point of the scheme - eleven
+     * instalments bought gold at eleven rates and all of it is sold at one.
+     *
+     * <p>The money leaving the drawer is the counter's business; what is
+     * recorded here is that the chit was paid out and for how much.
+     */
+    @Transactional
+    public ChitDtos.Account withdraw(Long id, ChitDtos.WithdrawRequest request) {
+        ChitAccount account = lock(id);
+        requireRedeemable(account);
+        LocalDate withdrawnOn = resolveDate(request.withdrawnOn(), "withdrawnOn");
+
+        ChitRedemption redemption = new ChitRedemption();
+        redemption.setRedeemedOn(withdrawnOn);
+        redemption.setKind(RedemptionKind.CASH);
+        redemption.setPaymentMethod(parseMethod(request.paymentMethod()));
+        redemption.setReferenceNo(StringNormalizer.trimToNull(request.referenceNo()));
+        redemption.setRemarks(StringNormalizer.trimToNull(request.remarks()));
+
+        if (account.isGold()) {
+            if (request.ratePerGram() == null) {
+                throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "ratePerGram",
+                        "Chit %s holds gold. Enter today's rate to say what it is worth."
+                                .formatted(account.getChitNumber()));
+            }
+            redemption.setGrams(account.getBalanceGrams());
+            redemption.setRatePerGram(Money.money(request.ratePerGram()));
+        } else if (request.ratePerGram() != null) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "ratePerGram",
+                    "Chit %s holds money, not gold. It takes no rate."
+                            .formatted(account.getChitNumber()));
+        }
+        redemption.setAmount(calculator.cashValue(
+                account.getBalanceAmount(), redemption.getGrams(), redemption.getRatePerGram()));
+
+        account.redeem(redemption);
+        accountRepository.flush();
+        log.info("Chit {} withdrawn as cash: {}{}", account.getChitNumber(), redemption.getAmount(),
+                redemption.getGrams() == null ? "" : " for " + redemption.getGrams() + " g");
+        return mapper.toAccount(requireDetailed(id));
+    }
+
+    /**
      * Abandons a chit before it matures.
      *
      * <p>The chit is kept, marked CANCELLED, as the record of what was paid in.
@@ -312,6 +361,25 @@ public class ChitService {
                             .formatted(account.getChitNumber()));
         }
         return payment;
+    }
+
+    /**
+     * A chit can only be spent once it has matured and while something is left
+     * on it. Saying which of the two is wrong matters at a counter: one means
+     * "add the bonus first" and the other means "this chit is already gone".
+     */
+    private static void requireRedeemable(ChitAccount account) {
+        if (account.isRedeemable()) {
+            return;
+        }
+        String reason = switch (account.getStatus()) {
+            case ACTIVE, COMPLETE -> "has not matured yet. Add the bonus to mature it first";
+            case CLOSED -> "has already been spent in full";
+            case CANCELLED -> "was cancelled";
+            case MATURED -> "has nothing left on it";
+        };
+        throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
+                "Chit %s %s.".formatted(account.getChitNumber(), reason));
     }
 
     private static PaymentMethod parseMethod(String method) {

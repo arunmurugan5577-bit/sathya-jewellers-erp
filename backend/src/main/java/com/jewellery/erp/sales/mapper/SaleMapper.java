@@ -88,6 +88,7 @@ public class SaleMapper {
                 r.discountAmount(),
                 r.grandTotal(),
                 r.oldMetalAdjustmentAmount(),
+                r.chitAdjustmentAmount(),
                 r.roundOffAmount(),
                 r.netPayable(),
                 r.amountPaid(),
@@ -116,6 +117,7 @@ public class SaleMapper {
                 s.getItems().stream().map(this::toLine).toList(),
                 toTotals(s),
                 s.getOldMetalAdjustments().stream().map(this::toAdjustment).toList(),
+                s.getChitRedemptions().stream().map(SaleMapper::toChitCredit).toList(),
                 s.getPayments().stream().map(this::toPayment).toList(),
                 s.getRemarks(),
                 s.getCancelReason(),
@@ -123,6 +125,18 @@ public class SaleMapper {
                 s.getCancelledBy(),
                 s.getCreatedAt(),
                 s.getCreatedBy());
+    }
+
+    private static SaleDtos.ChitCredit toChitCredit(com.jewellery.erp.chit.entity.ChitRedemption r) {
+        return new SaleDtos.ChitCredit(
+                r.getId(),
+                r.getChitAccount().getId(),
+                r.getChitAccount().getChitNumber(),
+                r.getChitAccount().getSchemeType().name(),
+                r.getGrams(),
+                r.getRatePerGram(),
+                r.getAmount(),
+                r.getStatus().name());
     }
 
     public SaleDtos.Summary toSummary(Sale s) {
@@ -150,6 +164,7 @@ public class SaleMapper {
                 s.getDiscountAmount(),
                 s.getGrandTotal(),
                 s.getOldMetalAdjustmentAmount(),
+                s.getChitAdjustmentAmount(),
                 s.getRoundOffAmount(),
                 s.getNetPayable(),
                 s.getAmountPaid(),

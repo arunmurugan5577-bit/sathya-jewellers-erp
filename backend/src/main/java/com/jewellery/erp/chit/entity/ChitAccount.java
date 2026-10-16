@@ -120,6 +120,10 @@ public class ChitAccount extends AuditableEntity {
     @OrderBy("instalmentNo ASC")
     private List<ChitPayment> payments = new ArrayList<>();
 
+    @OneToMany(mappedBy = "chitAccount", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private List<ChitRedemption> redemptions = new ArrayList<>();
+
     // --- the rules ------------------------------------------------------------
 
     public boolean isGold() {
@@ -171,6 +175,92 @@ public class ChitAccount extends AuditableEntity {
     public void mature(LocalDate on) {
         status = ChitStatus.MATURED;
         maturedOn = on;
+    }
+
+    /** Matured, with something still on it. Only such a chit can be spent. */
+    public boolean isRedeemable() {
+        return status == ChitStatus.MATURED && !isSpent();
+    }
+
+    /** Nothing left: a gold chit with no grams, a money chit with no rupees. */
+    public boolean isSpent() {
+        return (isGold() ? balanceGrams : balanceAmount).signum() == 0;
+    }
+
+    /**
+     * Takes value off the chit.
+     *
+     * <p>The only thing that lowers a balance, as {@link #applyPayment} is the
+     * only thing that raises one. A chit with nothing left closes itself: there
+     * is no state in which a spent chit is still waiting to be spent.
+     */
+    public void redeem(ChitRedemption redemption) {
+        redemption.setChitAccount(this);
+        redemptions.add(redemption);
+
+        if (redemption.getGrams() != null) {
+            balanceGrams = Money.weight(balanceGrams.subtract(redemption.getGrams()));
+        } else {
+            balanceAmount = Money.money(balanceAmount.subtract(redemption.getAmount()));
+        }
+        syncGoldCost();
+
+        if (isSpent()) {
+            status = ChitStatus.CLOSED;
+            closedOn = redemption.getRedeemedOn();
+            closeReason = redemption.getKind() == RedemptionKind.CASH
+                    ? "Withdrawn as cash"
+                    : "Spent against an invoice";
+        }
+    }
+
+    /**
+     * Puts a redemption back, because the invoice it was spent against was
+     * cancelled or deleted.
+     *
+     * <p>A chit that had closed opens again: the customer has their value back
+     * and may spend it on something else.
+     */
+    public void returnRedemption(ChitRedemption redemption) {
+        redemption.setStatus(RedemptionStatus.CANCELLED);
+
+        if (redemption.getGrams() != null) {
+            balanceGrams = Money.weight(balanceGrams.add(redemption.getGrams())).min(accruedGrams);
+        } else {
+            balanceAmount = Money.money(balanceAmount.add(redemption.getAmount())).min(paidAmount);
+        }
+        syncGoldCost();
+
+        if (status == ChitStatus.CLOSED && !isSpent()) {
+            status = ChitStatus.MATURED;
+            closedOn = null;
+            closeReason = null;
+        }
+    }
+
+    /**
+     * Keeps a gold chit's rupee balance tied to the grams it still holds.
+     *
+     * <p>A gold chit carries two balances for one thing: the grams, and what
+     * those grams cost to buy. What they are worth today is grams times
+     * today's rate and is never stored; the rupee balance is the cost, which
+     * the database will not let exceed what was paid in. Deriving it from the
+     * grams rather than adjusting it in steps means the two cannot drift, and
+     * a chit spent to the last milligram ends at zero rather than at a
+     * rounding crumb.
+     */
+    private void syncGoldCost() {
+        if (!isGold()) {
+            return;
+        }
+        if (balanceGrams.signum() == 0) {
+            balanceAmount = Money.ZERO;
+        } else if (balanceGrams.compareTo(accruedGrams) >= 0) {
+            balanceAmount = paidAmount;
+        } else {
+            balanceAmount = Money.money(
+                    paidAmount.multiply(balanceGrams).divide(accruedGrams, Money.MONEY_SCALE, Money.ROUNDING));
+        }
     }
 
     @Override

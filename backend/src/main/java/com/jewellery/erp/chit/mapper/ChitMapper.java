@@ -3,6 +3,7 @@ package com.jewellery.erp.chit.mapper;
 import com.jewellery.erp.chit.dto.ChitDtos;
 import com.jewellery.erp.chit.entity.ChitAccount;
 import com.jewellery.erp.chit.entity.ChitPayment;
+import com.jewellery.erp.chit.entity.ChitRedemption;
 import com.jewellery.erp.chit.entity.ChitScheme;
 import com.jewellery.erp.chit.service.ChitCalculator;
 import java.util.List;
@@ -46,6 +47,24 @@ public class ChitMapper {
                 payment.getCreatedBy());
     }
 
+    public ChitDtos.Redemption toRedemption(ChitRedemption redemption) {
+        return new ChitDtos.Redemption(
+                redemption.getId(),
+                redemption.getRedeemedOn(),
+                redemption.getKind().name(),
+                redemption.getGrams(),
+                redemption.getRatePerGram(),
+                redemption.getAmount(),
+                redemption.getSale() == null ? null : redemption.getSale().getId(),
+                redemption.getSale() == null ? null : redemption.getSale().getInvoiceNumber(),
+                redemption.getStatus().name(),
+                redemption.getPaymentMethod() == null ? null : redemption.getPaymentMethod().name(),
+                redemption.getReferenceNo(),
+                redemption.getRemarks(),
+                redemption.getCreatedAt(),
+                redemption.getCreatedBy());
+    }
+
     public ChitDtos.Account toAccount(ChitAccount account) {
         return new ChitDtos.Account(
                 account.getId(),
@@ -77,6 +96,7 @@ public class ChitMapper {
                 account.getCloseReason(),
                 account.getRemarks(),
                 account.getPayments().stream().map(this::toPayment).toList(),
+                account.getRedemptions().stream().map(this::toRedemption).toList(),
                 account.getCreatedAt(),
                 account.getCreatedBy());
     }

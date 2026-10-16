@@ -93,6 +93,53 @@ class SaleCalculatorTest {
     }
 
     @Test
+    @DisplayName("a matured chit settles the goods and the customer pays the GST")
+    void chitComesOffTheGrandTotal() {
+        // 36,000 of gold against a 36,000 chit: the shop still charges 3% on
+        // the jewellery, so what the customer hands over is the tax.
+        SaleCalculator.Result r = calculator.calculate(
+                List.of(line("10.000", "0", "3600", "0", "3")),
+                BigDecimal.ZERO, BigDecimal.ZERO, bd("36000"), BigDecimal.ZERO);
+
+        assertThat(r.subtotal()).isEqualByComparingTo("36000");
+        assertThat(r.taxAmount()).isEqualByComparingTo("1080");
+        assertThat(r.grandTotal()).isEqualByComparingTo("37080");
+        assertThat(r.chitAdjustmentAmount()).isEqualByComparingTo("36000");
+        assertThat(r.netPayable()).isEqualByComparingTo("1080");
+        assertThat(r.paymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+    }
+
+    @Test
+    @DisplayName("old gold and a chit both come off, old gold first")
+    void oldMetalAndChitTogether() {
+        SaleCalculator.Result r = calculator.calculate(
+                List.of(line("20.800", "30", "235", "550", "3")),
+                bd("111"), bd("2000"), bd("4500"), bd("500"));
+
+        assertThat(r.grandTotal()).isEqualByComparingTo("7000");
+        assertThat(r.oldMetalAdjustmentAmount()).isEqualByComparingTo("2000");
+        assertThat(r.chitAdjustmentAmount()).isEqualByComparingTo("4500");
+        assertThat(r.netPayable()).isEqualByComparingTo("500");
+        assertThat(r.balanceAmount()).isEqualByComparingTo("0");
+        assertThat(r.paymentStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("a chit worth more than the invoice is refused against what is left, not the total")
+    void chitBeyondWhatIsLeftToPay() {
+        List<SaleCalculator.LineInput> lines = List.of(line("20.800", "30", "235", "550", "3"));
+
+        // 7,000 total, 2,000 of it already settled by old gold: a 5,000 chit
+        // fits exactly and 5,000.01 does not.
+        assertThat(calculator.calculate(lines, bd("111"), bd("2000"), bd("5000"), BigDecimal.ZERO).netPayable())
+                .isEqualByComparingTo("0");
+        assertThatThrownBy(() ->
+                calculator.calculate(lines, bd("111"), bd("2000"), bd("5000.01"), BigDecimal.ZERO))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(ErrorCode.CHIT_BALANCE_EXCEEDED));
+    }
+
+    @Test
     void rejectsDiscountAdjustmentAndPaymentsBeyondTheTotal() {
         List<SaleCalculator.LineInput> lines = List.of(line("20.800", "30", "235", "550", "3"));
 

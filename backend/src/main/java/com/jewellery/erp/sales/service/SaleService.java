@@ -14,6 +14,8 @@ import com.jewellery.erp.inventory.entity.InventoryItem;
 import com.jewellery.erp.inventory.service.InventoryItemService;
 import com.jewellery.erp.numbering.DocumentNumberService;
 import com.jewellery.erp.numbering.DocumentSeries;
+import com.jewellery.erp.chit.entity.ChitAccount;
+import com.jewellery.erp.chit.service.ChitRedemptionService;
 import com.jewellery.erp.oldmetal.entity.OldMetalTransaction;
 import com.jewellery.erp.oldmetal.service.OldMetalService;
 import com.jewellery.erp.sales.calculation.SaleCalculator;
@@ -81,6 +83,7 @@ public class SaleService {
     private final CustomerService customerService;
     private final InventoryItemService inventoryItemService;
     private final OldMetalService oldMetalService;
+    private final ChitRedemptionService chitRedemptionService;
     private final ShopSettingsService shopSettingsService;
     private final DocumentNumberService documentNumberService;
     private final BusinessClock businessClock;
@@ -92,6 +95,7 @@ public class SaleService {
             CustomerService customerService,
             InventoryItemService inventoryItemService,
             OldMetalService oldMetalService,
+            ChitRedemptionService chitRedemptionService,
             ShopSettingsService shopSettingsService,
             DocumentNumberService documentNumberService,
             BusinessClock businessClock) {
@@ -101,6 +105,7 @@ public class SaleService {
         this.customerService = customerService;
         this.inventoryItemService = inventoryItemService;
         this.oldMetalService = oldMetalService;
+        this.chitRedemptionService = chitRedemptionService;
         this.shopSettingsService = shopSettingsService;
         this.documentNumberService = documentNumberService;
         this.businessClock = businessClock;
@@ -147,8 +152,19 @@ public class SaleService {
             assertAdjustmentsValid(request, bills, request.customerId());
         }
 
+        List<ChitRedemptionService.Spend> chits = List.of();
+        if (!request.chitsOrEmpty().isEmpty()) {
+            if (request.customerId() == null) {
+                throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "customerId",
+                        "Choose the customer before applying a chit.");
+            }
+            chits = chitRedemptionService.price(chitSpends(request),
+                    chitRedemptionService.findRedeemable(chitIds(request)), request.customerId());
+        }
+
         SaleCalculator.Result result = calculator.calculate(
-                toInputs(request, pieces, weights), request.discountAmount(), adjustment, sumPayments(request));
+                toInputs(request, pieces, weights), request.discountAmount(), adjustment,
+                chitRedemptionService.total(chits), sumPayments(request));
 
         List<SaleDtos.Line> lines = new ArrayList<>();
         for (int i = 0; i < pieces.size(); i++) {
@@ -218,9 +234,16 @@ public class SaleService {
                 : oldMetalService.lockUsable(adjustmentIds(request));
         assertAdjustmentsValid(request, bills, customer.getId());
 
+        // Lock 3: the chits, so the same 24,000 cannot settle two invoices.
+        Map<Long, ChitAccount> chitAccounts = request.chitsOrEmpty().isEmpty()
+                ? Map.of()
+                : chitRedemptionService.lockRedeemable(chitIds(request));
+        List<ChitRedemptionService.Spend> chits =
+                chitRedemptionService.price(chitSpends(request), chitAccounts, customer.getId());
+
         SaleCalculator.Result result = calculator.calculate(
                 toInputs(request, pieces, weights), request.discountAmount(),
-                sumAdjustments(request), sumPayments(request));
+                sumAdjustments(request), chitRedemptionService.total(chits), sumPayments(request));
 
         Sale sale = new Sale();
         sale.setCustomer(customer);
@@ -253,10 +276,13 @@ public class SaleService {
         }
         inventoryItemService.billOut(billed);
 
-        // Lock 3, last: the invoice counter.
+        // Lock 4, last: the invoice counter.
         sale.setInvoiceNumber(documentNumberService.next(DocumentSeries.SALE_INVOICE, invoiceDate));
 
         Sale saved = repository.saveAndFlush(sale);
+        // After saving, because a redemption names the invoice it paid for and
+        // there is no invoice to name until the row exists.
+        chitRedemptionService.apply(chits, saved, invoiceDate);
         log.info("Sale {} completed for customer {}: {} item(s), grand total {}, payable {}",
                 saved.getInvoiceNumber(), customer.getCustomerCode(), pieces.size(),
                 saved.getGrandTotal(), saved.getNetPayable());
@@ -342,13 +368,15 @@ public class SaleService {
         if (!released.isEmpty()) {
             oldMetalService.releaseUsage(released);
         }
+        BigDecimal chitReleased = chitRedemptionService.releaseForSale(id);
 
         sale.setStatus(SaleStatus.CANCELLED);
         sale.setCancelReason(StringNormalizer.trimToNull(reason));
         sale.setCancelledBy(SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER));
         sale.setCancelledAt(Instant.now());
         repository.flush();
-        log.info("Sale {} cancelled: {} piece(s) returned to stock", sale.getInvoiceNumber(), returning.size());
+        log.info("Sale {} cancelled: {} piece(s) returned to stock{}", sale.getInvoiceNumber(), returning.size(),
+                chitReleased.signum() == 0 ? "" : ", " + chitReleased + " put back on chits");
         return mapper.toDetail(requireDetailed(id));
     }
 
@@ -392,6 +420,9 @@ public class SaleService {
         if (!released.isEmpty()) {
             oldMetalService.releaseUsage(released);
         }
+        // Before the row goes: the redemption rows are deleted with the invoice
+        // by the foreign key, so the value has to be back on the chit first.
+        chitRedemptionService.releaseForSale(id);
 
         String number = sale.getInvoiceNumber();
         boolean numberFreed =
@@ -526,6 +557,7 @@ public class SaleService {
         sale.setDiscountAmount(r.discountAmount());
         sale.setGrandTotal(r.grandTotal());
         sale.setOldMetalAdjustmentAmount(r.oldMetalAdjustmentAmount());
+        sale.setChitAdjustmentAmount(r.chitAdjustmentAmount());
         sale.setRoundOffAmount(r.roundOffAmount());
         sale.setNetPayable(r.netPayable());
         sale.setAmountPaid(r.amountPaid());
@@ -546,6 +578,17 @@ public class SaleService {
         return request.adjustmentsOrEmpty().stream()
                 .map(a -> Money.money(a.amount()))
                 .reduce(Money.ZERO, BigDecimal::add);
+    }
+
+    private static List<Long> chitIds(SaleRequests.Sale request) {
+        return request.chitsOrEmpty().stream().map(SaleRequests.ChitRedemption::chitAccountId).toList();
+    }
+
+    private static List<ChitRedemptionService.SpendRequest> chitSpends(SaleRequests.Sale request) {
+        return request.chitsOrEmpty().stream()
+                .map(c -> new ChitRedemptionService.SpendRequest(
+                        c.chitAccountId(), c.amount(), c.grams(), c.ratePerGram()))
+                .toList();
     }
 
     private static BigDecimal sumPayments(SaleRequests.Sale request) {

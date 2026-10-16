@@ -102,6 +102,9 @@ public class Sale extends AuditableEntity {
     @Column(name = "old_metal_adjustment_amount", nullable = false, precision = 14, scale = 2, updatable = false)
     private BigDecimal oldMetalAdjustmentAmount;
 
+    @Column(name = "chit_adjustment_amount", nullable = false, precision = 14, scale = 2, updatable = false)
+    private BigDecimal chitAdjustmentAmount = java.math.BigDecimal.ZERO;
+
     @Column(name = "round_off_amount", nullable = false, precision = 14, scale = 2, updatable = false)
     private BigDecimal roundOffAmount;
 
@@ -147,6 +150,18 @@ public class Sale extends AuditableEntity {
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL)
     @OrderBy("id ASC")
     private Set<SalePayment> payments = new LinkedHashSet<>();
+
+    /**
+     * Chit value applied to this invoice.
+     *
+     * <p>Read-only here, and deliberately not cascaded. A redemption is
+     * written through the chit it came off, which is the side that has to keep
+     * a balance straight; the invoice only needs to be able to print what
+     * settled it.
+     */
+    @OneToMany(mappedBy = "sale")
+    @OrderBy("id ASC")
+    private Set<com.jewellery.erp.chit.entity.ChitRedemption> chitRedemptions = new LinkedHashSet<>();
 
     public void addItem(SaleItem item) {
         item.setSale(this);

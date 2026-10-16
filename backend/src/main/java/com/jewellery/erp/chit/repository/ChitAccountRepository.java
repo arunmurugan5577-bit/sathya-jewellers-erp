@@ -2,6 +2,8 @@ package com.jewellery.erp.chit.repository;
 
 import com.jewellery.erp.chit.entity.ChitAccount;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,4 +39,9 @@ public interface ChitAccountRepository
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from ChitAccount c where c.id = :id")
     Optional<ChitAccount> lockById(@Param("id") Long id);
+
+    /** Several chits at once, in id order so two invoices cannot deadlock over them. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from ChitAccount c where c.id in :ids order by c.id")
+    List<ChitAccount> lockAllById(@Param("ids") Collection<Long> ids);
 }

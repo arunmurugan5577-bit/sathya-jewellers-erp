@@ -38,6 +38,8 @@ import org.springframework.stereotype.Component;
  *       piece's HSN code; lines with different rates are taxed as separate groups.
  *   <li>The discount comes off after GST.
  *   <li>Old gold / silver adjustments come off the GRAND TOTAL, giving the amount payable.
+ *   <li>A matured chit comes off the same way, after the old gold. The jewellery is taxed
+ *       in full either way: the chit settles what is payable, it does not reduce the sale.
  * </ul>
  *
  * <p>A formula change is a change to this class alone.
@@ -77,6 +79,7 @@ public class SaleCalculator {
             BigDecimal discountAmount,
             BigDecimal grandTotal,
             BigDecimal oldMetalAdjustmentAmount,
+            BigDecimal chitAdjustmentAmount,
             BigDecimal roundOffAmount,
             BigDecimal netPayable,
             BigDecimal amountPaid,
@@ -85,6 +88,12 @@ public class SaleCalculator {
 
     public Result calculate(
             List<LineInput> inputs, BigDecimal discount, BigDecimal oldMetalAdjustment, BigDecimal amountPaid) {
+        return calculate(inputs, discount, oldMetalAdjustment, Money.ZERO, amountPaid);
+    }
+
+    public Result calculate(
+            List<LineInput> inputs, BigDecimal discount, BigDecimal oldMetalAdjustment,
+            BigDecimal chitAdjustment, BigDecimal amountPaid) {
 
         // --- 1. Each piece: weight, wastage, amount ----------------------------
         List<Priced> priced = new ArrayList<>(inputs.size());
@@ -145,14 +154,24 @@ public class SaleCalculator {
         }
         List<BigDecimal> discountByLine = Allocation.distribute(discountAmount, lineTotals);
 
-        // --- 4. Old gold / silver, round-off, payment -------------------------
+        // --- 4. Old gold / silver, chit, round-off, payment --------------------
         BigDecimal adjustment = Money.money(Money.nullToZero(oldMetalAdjustment));
         if (adjustment.compareTo(grandTotal) > 0) {
             throw new BusinessRuleException(ErrorCode.OLD_METAL_AMOUNT_EXCEEDED, "oldMetalAdjustments",
                     "Old gold/silver adjustment of %s is more than the grand total of %s."
                             .formatted(adjustment, grandTotal));
         }
-        BigDecimal beforeRounding = grandTotal.subtract(adjustment);
+        // The chit is checked against what is left after the old gold, so the
+        // message names the figure the counter has to change rather than a
+        // total they already knew was big enough.
+        BigDecimal chit = Money.money(Money.nullToZero(chitAdjustment));
+        BigDecimal afterOldMetal = grandTotal.subtract(adjustment);
+        if (chit.compareTo(afterOldMetal) > 0) {
+            throw new BusinessRuleException(ErrorCode.CHIT_BALANCE_EXCEEDED, "chitRedemptions",
+                    "Chit value of %s is more than the %s left to pay on this invoice."
+                            .formatted(chit, afterOldMetal));
+        }
+        BigDecimal beforeRounding = afterOldMetal.subtract(chit);
         BigDecimal netPayable = Money.rupees(beforeRounding);
         BigDecimal roundOff = netPayable.subtract(beforeRounding);
 
@@ -171,7 +190,7 @@ public class SaleCalculator {
         }
 
         return new Result(lines, subtotal, cgstTotal, sgstTotal, taxTotal, discountAmount, grandTotal,
-                adjustment, roundOff, netPayable, paid, balance, paymentStatus(netPayable, paid));
+                adjustment, chit, roundOff, netPayable, paid, balance, paymentStatus(netPayable, paid));
     }
 
     /** What is owed after a further payment is recorded against an existing invoice. */

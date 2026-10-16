@@ -69,6 +69,34 @@ public final class SaleRequests {
             @Digits(integer = 12, fraction = 2, message = "Amount allows up to 2 decimal places")
             BigDecimal amount) {}
 
+    /**
+     * A matured chit put against this invoice.
+     *
+     * <p>Asked for differently by kind, because the two hold different things.
+     * A money chit is spent in rupees - {@code amount}. A gold chit is spent
+     * in grams at the rate on the day - {@code grams} and {@code ratePerGram}
+     * - and its value follows from those; asking for an amount would mean
+     * dividing back into grams and losing a milligram doing it.
+     */
+    @Schema(name = "SaleChitRedemptionRequest")
+    public record ChitRedemption(
+            @NotNull(message = "Chit is required") Long chitAccountId,
+
+            @Schema(example = "24000.00", description = "Money chits only")
+            @DecimalMin(value = "0.01", message = "The amount must be greater than zero")
+            @Digits(integer = 12, fraction = 2, message = "Amount allows up to 2 decimal places")
+            BigDecimal amount,
+
+            @Schema(example = "2.632", description = "Gold chits only: the grams to take off the chit")
+            @DecimalMin(value = "0.001", message = "The weight must be greater than zero")
+            @Digits(integer = 9, fraction = 3, message = "Weight allows at most 3 decimal places")
+            BigDecimal grams,
+
+            @Schema(example = "14800.00", description = "Gold chits only: today's rate")
+            @DecimalMin(value = "0.01", message = "The rate must be greater than zero")
+            @Digits(integer = 10, fraction = 2, message = "Rate allows up to 2 decimal places")
+            BigDecimal ratePerGram) {}
+
     @Schema(name = "SalePaymentRequest")
     public record Payment(
             @NotNull(message = "Payment method is required") PaymentMethod method,
@@ -104,6 +132,9 @@ public final class SaleRequests {
             @Size(max = 10, message = "At most 10 old gold / silver bills per invoice")
             List<@Valid @NotNull OldMetalAdjustment> oldMetalAdjustments,
 
+            @Size(max = 5, message = "At most 5 chits per invoice")
+            List<@Valid @NotNull ChitRedemption> chitRedemptions,
+
             @Size(max = 10, message = "At most 10 payments per invoice")
             List<@Valid @NotNull Payment> payments,
 
@@ -111,6 +142,10 @@ public final class SaleRequests {
 
         public List<OldMetalAdjustment> adjustmentsOrEmpty() {
             return oldMetalAdjustments == null ? List.of() : oldMetalAdjustments;
+        }
+
+        public List<ChitRedemption> chitsOrEmpty() {
+            return chitRedemptions == null ? List.of() : chitRedemptions;
         }
 
         public List<Payment> paymentsOrEmpty() {

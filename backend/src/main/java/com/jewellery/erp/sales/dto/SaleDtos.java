@@ -67,6 +67,8 @@ public final class SaleDtos {
             @Schema(example = "111.00") BigDecimal discountAmount,
             @Schema(example = "7000.00") BigDecimal grandTotal,
             BigDecimal oldMetalAdjustmentAmount,
+            @Schema(example = "36000.00", description = "Matured chit value put against this invoice")
+            BigDecimal chitAdjustmentAmount,
             BigDecimal roundOffAmount,
             BigDecimal netPayable,
             BigDecimal amountPaid,
@@ -86,6 +88,18 @@ public final class SaleDtos {
             String transactionNumber,
             LocalDate transactionDate,
             BigDecimal adjustmentAmount,
+            String status) {}
+
+    /** One chit, and what it took off this invoice. */
+    @Schema(name = "SaleChitRedemption")
+    public record ChitCredit(
+            Long id,
+            Long chitAccountId,
+            @Schema(example = "CH-2026-000001") String chitNumber,
+            @Schema(example = "GOLD") String schemeType,
+            @Schema(example = "2.632", description = "Gold chits only") BigDecimal grams,
+            @Schema(example = "14800.00", description = "Gold chits only") BigDecimal ratePerGram,
+            BigDecimal amount,
             String status) {}
 
     @Schema(name = "SalePayment")
@@ -119,6 +133,7 @@ public final class SaleDtos {
             List<Line> items,
             Totals totals,
             List<Adjustment> oldMetalAdjustments,
+            List<ChitCredit> chitRedemptions,
             List<Payment> payments,
             String remarks,
             String cancelReason,

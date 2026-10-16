@@ -48,6 +48,28 @@ public final class ChitDtos {
             Instant createdAt,
             String createdBy) {}
 
+    // ---------------------------------------------------------- redemptions ---
+
+    @Schema(name = "ChitRedemption")
+    public record Redemption(
+            Long id,
+            LocalDate redeemedOn,
+            @Schema(example = "SALE", description = "CASH if the customer took the money, SALE if they bought")
+            String kind,
+            @Schema(example = "2.632", description = "Gold chits only") BigDecimal grams,
+            @Schema(example = "14800.00", description = "Gold chits only: what the grams were valued at")
+            BigDecimal ratePerGram,
+            @Schema(example = "38953.00") BigDecimal amount,
+            Long saleId,
+            @Schema(example = "INV-2026-000012") String invoiceNumber,
+            @Schema(example = "ACTIVE", description = "CANCELLED once the invoice it was applied to is cancelled")
+            String status,
+            String paymentMethod,
+            String referenceNo,
+            String remarks,
+            Instant createdAt,
+            String createdBy) {}
+
     // ------------------------------------------------------------- the chit ---
 
     @Schema(name = "ChitAccount")
@@ -85,6 +107,8 @@ public final class ChitDtos {
             String closeReason,
             String remarks,
             List<Payment> payments,
+            @Schema(description = "What has been taken off the chit: cash withdrawals and invoices")
+            List<Redemption> redemptions,
             Instant createdAt,
             String createdBy) {}
 
@@ -146,6 +170,28 @@ public final class ChitDtos {
             @DecimalMin(value = "0.01", message = "The rate must be more than zero")
             @Digits(integer = 12, fraction = 2, message = "The rate allows up to 2 decimal places")
             BigDecimal ratePerGram) {}
+
+    /**
+     * Taking the chit as cash.
+     *
+     * <p>The whole balance goes: a withdrawal is the customer closing the chit
+     * and walking out with the money. A gold chit needs the rate today, since
+     * what it is worth is what its grams fetch on the day it is cashed.
+     */
+    @Schema(name = "WithdrawChitRequest")
+    public record WithdrawRequest(
+            @Schema(description = "Defaults to today.") LocalDate withdrawnOn,
+
+            @Schema(example = "14800.00", description = "The gold rate today. Gold chits only.")
+            @DecimalMin(value = "0.01", message = "The rate must be more than zero")
+            @Digits(integer = 12, fraction = 2, message = "The rate allows up to 2 decimal places")
+            BigDecimal ratePerGram,
+
+            @Schema(example = "CASH") String paymentMethod,
+
+            @Size(max = 100, message = "Reference must not exceed 100 characters") String referenceNo,
+
+            @Size(max = 300, message = "Remarks must not exceed 300 characters") String remarks) {}
 
     @Schema(name = "CancelChitRequest")
     public record CancelRequest(

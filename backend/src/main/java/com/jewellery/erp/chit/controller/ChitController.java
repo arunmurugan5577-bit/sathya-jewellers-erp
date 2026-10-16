@@ -105,6 +105,18 @@ public class ChitController {
         return ResponseEntity.ok(chitService.mature(id, request));
     }
 
+    @PostMapping("/{id}/withdraw")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_EDIT + "')")
+    @Operation(summary = "Pay the chit out as cash",
+            description = "The whole balance goes and the chit closes. A gold chit needs today's rate: what it "
+                    + "is worth is what its grams fetch on the day. Requires CHIT_EDIT.")
+    @ApiResponse(responseCode = "409", description = "The chit has not matured, or has nothing left on it",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    public ResponseEntity<ChitDtos.Account> withdraw(
+            @PathVariable Long id, @Valid @RequestBody ChitDtos.WithdrawRequest request) {
+        return ResponseEntity.ok(chitService.withdraw(id, request));
+    }
+
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_DELETE + "')")
     @Operation(summary = "Abandon a chit before it matures",
