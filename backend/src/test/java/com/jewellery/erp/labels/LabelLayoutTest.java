@@ -370,6 +370,83 @@ class LabelLayoutTest {
                 .orElseThrow(() -> new AssertionError("no logo on the tag"));
     }
 
+    /** The shop's own two tags, from the pair they photographed. */
+    private static LabelDtos.Label salangai(String serial) {
+        return new LabelDtos.Label(1L, serial, null, "7\" Salangai", new BigDecimal("77.180"), "7 inch",
+                "Silver", "Anklet", "Salangai", "SJ", "AVAILABLE");
+    }
+
+    @Test
+    @DisplayName("the description starts in the same place whatever the barcode comes to")
+    void descriptionDoesNotFollowTheBars() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+
+        // 151 is three digits and takes 68 modules - an odd digit count forces
+        // a code switch - where the four digits of 3130 take 57. Left to
+        // follow the bars, the two descriptions would sit 2.75 mm apart.
+        LabelLayout.Bars shortSerial = bars(layoutOf(salangai("151"), settings));
+        LabelLayout.Bars longSerial = bars(layoutOf(salangai("3130"), settings));
+        assertThat(shortSerial.widthMm()).isGreaterThan(longSerial.widthMm());
+
+        assertThat(text(layoutOf(salangai("3130"), settings), LabelLayout.Role.NAME).xMm())
+                .isEqualByComparingTo(text(layoutOf(salangai("151"), settings), LabelLayout.Role.NAME).xMm());
+    }
+
+    @Test
+    @DisplayName("and never before the middle of the tag, however short the barcode")
+    void descriptionStartsAtTheMiddleOfTheTag() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+        BigDecimal middle = settings.getLabelWidthMm().divide(new BigDecimal("2"), 3, java.math.RoundingMode.HALF_UP);
+
+        for (String serial : new String[] {"1", "151", "3130", "905351"}) {
+            LabelLayout layout = layoutOf(salangai(serial), settings);
+            assertThat(text(layout, LabelLayout.Role.NAME).xMm())
+                    .as("description on tag %s", serial)
+                    .isGreaterThanOrEqualTo(middle);
+        }
+    }
+
+    @Test
+    @DisplayName("but a description too wide for the right half follows the bars instead")
+    void aLongDescriptionKeepsItsRoom() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+        settings.setMarginLeftMm(new BigDecimal("-20.00"));
+        BigDecimal tagLeft = settings.getMarginLeftMm();
+        BigDecimal middle = tagLeft.add(new BigDecimal("30.000"));
+        BigDecimal tagRight = tagLeft.add(settings.getLabelWidthMm());
+
+        // 25 characters at 6 pt come to 30.7 mm: too wide for the 30 mm right
+        // half, and comfortable in the 33.2 mm the bars and side mark leave.
+        LabelDtos.Label wordy = new LabelDtos.Label(1L, "151",
+                null, "Ladies Antique Temple Set", new BigDecimal("77.180"), null,
+                "Silver", "Anklet", "Salangai", "SJ", "AVAILABLE");
+        LabelLayout.Text name = text(layoutOf(wordy, settings), LabelLayout.Role.NAME);
+
+        // It gives up the middle rather than the last few letters.
+        assertThat(name.xMm()).isLessThan(middle);
+        assertThat(name.xMm().add(LabelLayout.textWidthMm(name.value(), name.fontPt())))
+                .isLessThanOrEqualTo(tagRight);
+    }
+
+    @Test
+    @DisplayName("the middle is the tag's, not the origin's, when the margin is negative")
+    void theMiddleIsMeasuredFromTheTagsOwnEdge() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+        // How the shop undoes a margin its printer adds: the artwork starts
+        // 20 mm before the tag, so the origin is off the front of it.
+        settings.setMarginLeftMm(new BigDecimal("-20.00"));
+
+        LabelLayout layout = layoutOf(salangai("151"), settings);
+        // 20 mm before the tag plus half of 60 - the tag's own middle, not the
+        // 30 mm that measuring from the origin would give.
+        assertThat(text(layout, LabelLayout.Role.NAME).xMm()).isEqualByComparingTo("10.000");
+        assertThat(layout.sideBySide()).isTrue();
+    }
+
     private static LabelLayout.Text detail(LabelLayout layout, String value) {
         return layout.elements().stream()
                 .filter(LabelLayout.Text.class::isInstance)

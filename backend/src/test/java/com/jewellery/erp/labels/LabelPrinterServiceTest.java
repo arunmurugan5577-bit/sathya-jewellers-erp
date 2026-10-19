@@ -119,8 +119,14 @@ class LabelPrinterServiceTest {
         double[] after = inkSpanMm(settings, gold());
 
         assertThat(after).isNotNull();
-        // Nothing lost: the design is the same length as before, only moved.
-        assertThat(after[1] - after[0]).isCloseTo(before[1] - before[0], org.assertj.core.data.Offset.offset(0.2));
+        // Nothing lost: the design is at least as long as before.
+        //
+        // Not the same length to the hair any more, which it used to be. The
+        // description is anchored to the middle of the tag and the bars to the
+        // margin, so dragging the margin back widens the gap between them -
+        // that is what anchoring the description is for. Clipping would show
+        // up here as a design that got *shorter*.
+        assertThat(after[1] - after[0]).isGreaterThanOrEqualTo(before[1] - before[0] - 0.2);
         assertThat(LabelPrinterService.leadMm(settings)).isEqualByComparingTo("12.80");
         assertThat(LabelPrinterService.pageWidthMm(settings)).isEqualByComparingTo("72.80");
         // It begins right at the start of the widened page, not chopped off at it.

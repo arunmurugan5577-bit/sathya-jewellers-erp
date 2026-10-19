@@ -180,6 +180,32 @@ public record LabelLayout(
         BigDecimal detailH = detailTextH.add(logoExtra);
         boolean hasDetailBlock = hasShopLine || !details.isEmpty() || useLogo;
 
+        BigDecimal originX = settings.getMarginLeftMm();
+
+        // Where the detail column starts, and it is the same on every tag.
+        //
+        // A barcode's width follows what the serial encodes to, not how long it
+        // looks: 151 is three digits and takes 68 modules, because an odd digit
+        // count forces a code switch, where the four digits of 3130 take 57.
+        // Letting the text follow the bars put the two tags' descriptions 2.75
+        // mm apart in a tray that should read as one column, so the gap after
+        // the bars takes up the slack instead and the text stays put.
+        //
+        // The column also never begins before the middle of the tag. That is
+        // the shop's rule and it is a sound one: the left half is the barcode's
+        // and the right half is the description's, so a scanner's aim and a
+        // jeweller's eye each have a side of the tag to themselves.
+        BigDecimal tagLeft = tagLeftMm(settings);
+        BigDecimal detailMinX = tagLeft.add(settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP));
+        BigDecimal detailNaturalX = originX.add(codeW).add(BLOCK_GAP_MM);
+        // Unless holding the line would push the description off the tag. The
+        // half is a rule about where a description looks right, not one worth
+        // losing the end of a long one over, so a description too wide for the
+        // right half goes back to following the bars.
+        boolean fitsFromTheMiddle =
+                detailMinX.add(detailW).compareTo(tagLeft.add(settings.getLabelWidthMm())) <= 0;
+        BigDecimal detailColumnX = fitsFromTheMiddle ? detailNaturalX.max(detailMinX) : detailNaturalX;
+
         // Side by side when both blocks fit across the tag. When they do not, the
         // details drop below the barcode - but only if the tag is deep enough to
         // hold them. On a tag as shallow as this shop's, stacking would run the
@@ -188,11 +214,10 @@ public record LabelLayout(
         // way the fix is the same: a smaller detail font, or a longer head.
         BigDecimal stackedH = codeH.add(IDENT_TOP_MM).add(detailH);
         boolean sideBySide = !hasDetailBlock
-                || codeW.add(BLOCK_GAP_MM).add(detailW).compareTo(contentW) <= 0
+                || detailColumnX.subtract(originX).add(detailW).compareTo(contentW) <= 0
                 || stackedH.compareTo(contentH) > 0;
         BigDecimal totalH = sideBySide ? codeH.max(detailH) : stackedH;
 
-        BigDecimal originX = settings.getMarginLeftMm();
         BigDecimal originY = settings.getMarginTopMm()
                 .add(contentH.subtract(totalH).max(BigDecimal.ZERO).divide(TWO, 3, RoundingMode.HALF_UP));
 
@@ -221,7 +246,7 @@ public record LabelLayout(
         }
 
         if (hasDetailBlock) {
-            BigDecimal detailX = sideBySide ? originX.add(codeW).add(BLOCK_GAP_MM) : originX;
+            BigDecimal detailX = sideBySide ? detailColumnX : originX;
             BigDecimal detailY = sideBySide
                     ? originY.add(totalH.subtract(detailH).divide(TWO, 3, RoundingMode.HALF_UP))
                     : codeY.add(codeH).add(IDENT_TOP_MM);
@@ -283,6 +308,24 @@ public record LabelLayout(
             lines.add("Size:" + label.size().trim());
         }
         return lines;
+    }
+
+    /**
+     * The tag's own left edge, in the same millimetres the elements are placed in.
+     *
+     * <p>Not always the origin. A negative left margin is how the shop undoes a
+     * margin its printer adds of its own accord: the artwork starts 20 mm before
+     * the tag, the page is grown by that much so nothing is clipped, and the
+     * roll still begins where it always did. The origin is therefore off the
+     * front of the tag, and anything measured against the tag - its middle, for
+     * one - has to start from here instead.
+     */
+    private static BigDecimal tagLeftMm(LabelSettings settings) {
+        // The same sum {@code LabelPrinterService.leadMm} does, read backwards:
+        // where the page was grown to the left, the artwork's own origin is the
+        // tag's edge; where it was not, the print offset alone separates them.
+        BigDecimal shift = settings.getMarginLeftMm().add(settings.getOffsetXMm());
+        return shift.signum() < 0 ? settings.getMarginLeftMm() : settings.getOffsetXMm().negate();
     }
 
     public static BigDecimal lineHeightMm(BigDecimal fontPt) {
