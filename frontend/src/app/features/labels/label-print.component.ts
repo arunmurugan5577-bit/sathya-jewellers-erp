@@ -144,14 +144,6 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
               <option value="">All</option>
             </select>
           </div>
-          <div class="toolbar__field">
-            <label class="toolbar__label" for="active">Status</label>
-            <select id="active" class="select" (change)="onActiveChange($event)">
-              <option value="">All</option>
-              <option value="true" [selected]="filters().active === true">Active</option>
-              <option value="false" [selected]="filters().active === false">Inactive</option>
-            </select>
-          </div>
         </div>
 
         <div class="selection">
@@ -257,17 +249,11 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
                   <td>{{ item.purityName }}</td>
                   <td>{{ item.categoryName }}</td>
                   <td>{{ item.subCategoryName || '-' }}</td>
-                  <td class="td--status">
+                  <td>
                     @if (item.status === 'SOLD') {
                       <span class="badge badge--info">Sold</span>
-                    } @else if (item.active) {
+                    } @else {
                       <span class="badge badge--success">In stock</span>
-                    }
-                    <!-- Shown beside the stock state, not instead of it: a
-                         withdrawn piece that has also been sold is both, and
-                         either one alone would be a half-truth. -->
-                    @if (!item.active) {
-                      <span class="badge badge--muted">Inactive</span>
                     }
                   </td>
                   <td class="td--actions">
@@ -354,8 +340,6 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
   `,
   styles: [
     `
-      .td--status { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-
       .chip {
         align-self: center;
         padding: var(--space-1) var(--space-3);
@@ -412,7 +396,17 @@ export class LabelPrintComponent {
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
   protected readonly page = signal<Page<InventoryItem>>(emptyPage<InventoryItem>());
-  protected readonly filters = signal<InventoryFilters>({ status: 'AVAILABLE' });
+  /**
+   * Active stock only, and there is no switch for it.
+   *
+   * <p>A piece is deactivated when it is out of the shop's reckoning, and the
+   * shop does not tag those. Listing them here only offers a tag nobody wants
+   * printed - and the list was quietly doing exactly that, drawing 41
+   * withdrawn pieces with the same green badge as the ones on the shelf.
+   * {@code LabelService} refuses them as well, so a stale page cannot print
+   * one either.
+   */
+  protected readonly filters = signal<InventoryFilters>({ status: 'AVAILABLE', active: true });
   protected readonly selected = signal<Map<number, InventoryItem>>(new Map());
   protected readonly copies = signal(1);
   /** Which tag of the row to begin at, so a part-used row is not thrown away. */
@@ -598,15 +592,6 @@ export class LabelPrintComponent {
     this.filters.update((current) => ({
       ...current,
       status: value === 'AVAILABLE' || value === 'SOLD' ? value : null,
-    }));
-    this.reload(0);
-  }
-
-  protected onActiveChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.filters.update((current) => ({
-      ...current,
-      active: value === '' ? null : value === 'true',
     }));
     this.reload(0);
   }

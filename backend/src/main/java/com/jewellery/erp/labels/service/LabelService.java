@@ -295,6 +295,15 @@ public class LabelService {
                 problems.add(new LabelDtos.Problem(id, null, "This piece has no serial number to put in a barcode."));
                 continue;
             }
+            // A deactivated piece is out of the shop's reckoning and does not
+            // get tagged. The label screen does not list them, so this catches
+            // the page left open since before one was withdrawn.
+            if (!item.isActive()) {
+                problems.add(new LabelDtos.Problem(id, serial,
+                        "%s has been deactivated, so it takes no label. Activate it on the item list first."
+                                .formatted(serial)));
+                continue;
+            }
             // Gold shows its purity after the serial number; other metals do not
             // carry one on the tag, so a missing one is not a reason to refuse.
             String purityText = settings.isShowPurity() ? purityFormatter.labelText(item.getPurity()) : null;
