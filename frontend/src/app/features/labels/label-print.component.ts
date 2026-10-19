@@ -144,6 +144,14 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
               <option value="">All</option>
             </select>
           </div>
+          <div class="toolbar__field">
+            <label class="toolbar__label" for="active">Status</label>
+            <select id="active" class="select" (change)="onActiveChange($event)">
+              <option value="">All</option>
+              <option value="true" [selected]="filters().active === true">Active</option>
+              <option value="false" [selected]="filters().active === false">Inactive</option>
+            </select>
+          </div>
         </div>
 
         <div class="selection">
@@ -249,11 +257,17 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
                   <td>{{ item.purityName }}</td>
                   <td>{{ item.categoryName }}</td>
                   <td>{{ item.subCategoryName || '-' }}</td>
-                  <td>
+                  <td class="td--status">
                     @if (item.status === 'SOLD') {
                       <span class="badge badge--info">Sold</span>
-                    } @else {
+                    } @else if (item.active) {
                       <span class="badge badge--success">In stock</span>
+                    }
+                    <!-- Shown beside the stock state, not instead of it: a
+                         withdrawn piece that has also been sold is both, and
+                         either one alone would be a half-truth. -->
+                    @if (!item.active) {
+                      <span class="badge badge--muted">Inactive</span>
                     }
                   </td>
                   <td class="td--actions">
@@ -340,6 +354,8 @@ const quiet = () => new HttpContext().set(SUPPRESS_ERROR_TOAST, true);
   `,
   styles: [
     `
+      .td--status { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+
       .chip {
         align-self: center;
         padding: var(--space-1) var(--space-3);
@@ -582,6 +598,15 @@ export class LabelPrintComponent {
     this.filters.update((current) => ({
       ...current,
       status: value === 'AVAILABLE' || value === 'SOLD' ? value : null,
+    }));
+    this.reload(0);
+  }
+
+  protected onActiveChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.filters.update((current) => ({
+      ...current,
+      active: value === '' ? null : value === 'true',
     }));
     this.reload(0);
   }
