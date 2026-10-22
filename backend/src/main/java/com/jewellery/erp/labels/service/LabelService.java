@@ -313,11 +313,10 @@ public class LabelService {
             // The short name moves above the barcode when it will not fit beside it,
             // so the barcode only has to fit the tag's own printable width.
             BigDecimal barcodeWidth = barcodeRenderer.widthMm(serial, settings.getBarcodeModuleMm());
-            BigDecimal available = settings.getContentWidthMm()
-                    .subtract(settings.getMarginLeftMm().multiply(BigDecimal.valueOf(2)));
+            BigDecimal available = LabelLayout.barcodeRoomMm(settings);
             if (barcodeWidth.compareTo(available) > 0) {
                 problems.add(new LabelDtos.Problem(id, serial,
-                        ("The barcode for %s needs %s mm but only %s mm fits across the tag. "
+                        ("The barcode for %s needs %s mm but only %s mm fits in the left half of the tag. "
                                 + "Lower the narrow bar width in label settings, or use wider tags.")
                                 .formatted(serial, scale(barcodeWidth), scale(available))));
                 continue;

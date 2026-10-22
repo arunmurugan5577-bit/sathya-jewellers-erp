@@ -79,6 +79,29 @@ public record LabelLayout(
      * the bars to read as part of them on a tag only 12 mm deep.
      */
     private static final BigDecimal BLOCK_GAP_MM = new BigDecimal("5.65");
+    /**
+     * The side mark's own nudge: 5 px right and 5 px down, at the 96 dpi a
+     * browser calls a pixel.
+     *
+     * <p>From the shop's printed sheet. Hard against the leading edge the mark
+     * came out crowding the tag's border, and a hair high against the bars
+     * beside it. The indent is taken before the mark rather than out of the
+     * gap after it, so the bars keep their clear space.
+     */
+    private static final BigDecimal SIDE_MARK_INDENT_MM = new BigDecimal("1.323");
+
+    private static final BigDecimal SIDE_MARK_DROP_MM = new BigDecimal("1.323");
+
+    /**
+     * How small the description may be set before it is no better than a smudge.
+     *
+     * <p>A thermal head at this size is already laying down four or five dots
+     * per stroke; below this the letters close up and the line reads as a grey
+     * bar. A description too long even at this size overflows rather than
+     * disappearing - an unreadable word is still worth more than no word.
+     */
+    private static final BigDecimal MIN_NAME_FONT_PT = new BigDecimal("3.0");
+
     /** Between the serial number and the purity. */
     private static final BigDecimal IDENT_GAP_MM = new BigDecimal("1");
     /** Under the bars, before the serial number. */
@@ -143,15 +166,13 @@ public record LabelLayout(
         // The side mark takes the strip before the bars when there is room for
         // it, and is dropped when there is not. Narrowing the bars to make it
         // fit is how a barcode stops scanning, so that is never an option.
+        BigDecimal sideStripW = SIDE_MARK_INDENT_MM.add(sideW).add(INNER_GAP_MM);
         boolean hasSideMark = !sideMark.isEmpty()
-                && sideW.add(INNER_GAP_MM).add(barsColumnW).compareTo(contentW) <= 0;
-        BigDecimal codeW = hasSideMark ? sideW.add(INNER_GAP_MM).add(barsColumnW) : barsColumnW;
+                && sideStripW.add(barsColumnW).compareTo(contentW) <= 0;
+        BigDecimal codeW = hasSideMark ? sideStripW.add(barsColumnW) : barsColumnW;
         BigDecimal codeH = barcodeH.add(IDENT_TOP_MM).add(identH);
 
         BigDecimal detailLineH = lineHeightMm(settings.getDetailFontPt());
-        BigDecimal detailTextW = details.stream()
-                .map(line -> textWidthMm(line, settings.getDetailFontPt()))
-                .reduce(BigDecimal.ZERO, BigDecimal::max);
         BigDecimal linesH = detailLineH.multiply(BigDecimal.valueOf(details.size()));
         // The logo is the last thing in the detail column, under the size line.
         BigDecimal logoExtra = useLogo
@@ -174,9 +195,6 @@ public record LabelLayout(
                 && linesH.add(logoExtra).add(shopLineH).compareTo(contentH) <= 0;
 
         BigDecimal detailTextH = linesH.add(hasShopLine ? shopLineH : BigDecimal.ZERO);
-        BigDecimal detailW = detailTextW
-                .max(hasShopLine ? textWidthMm(shop, settings.getDetailFontPt()) : BigDecimal.ZERO)
-                .max(logoSize);
         BigDecimal detailH = detailTextH.add(logoExtra);
         boolean hasDetailBlock = hasShopLine || !details.isEmpty() || useLogo;
 
@@ -196,15 +214,28 @@ public record LabelLayout(
         // and the right half is the description's, so a scanner's aim and a
         // jeweller's eye each have a side of the tag to themselves.
         BigDecimal tagLeft = tagLeftMm(settings);
+        BigDecimal tagRight = tagLeft.add(settings.getLabelWidthMm());
         BigDecimal detailMinX = tagLeft.add(settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP));
-        BigDecimal detailNaturalX = originX.add(codeW).add(BLOCK_GAP_MM);
-        // Unless holding the line would push the description off the tag. The
-        // half is a rule about where a description looks right, not one worth
-        // losing the end of a long one over, so a description too wide for the
-        // right half goes back to following the bars.
-        boolean fitsFromTheMiddle =
-                detailMinX.add(detailW).compareTo(tagLeft.add(settings.getLabelWidthMm())) <= 0;
-        BigDecimal detailColumnX = fitsFromTheMiddle ? detailNaturalX.max(detailMinX) : detailNaturalX;
+        BigDecimal detailColumnX = originX.add(codeW).add(BLOCK_GAP_MM).max(detailMinX);
+
+        // The description gets the rest of the tag, and is set to fit it.
+        //
+        // The weight and the size are of a known length; the name is whatever
+        // the piece is called, and "9.5\" M.THIRUKAI" ran off the end of the
+        // tag and onto the backing. It is set smaller until it fits instead,
+        // which keeps the whole name on a tag that has no second line to give
+        // it. Only the type shrinks - the line spacing does not - so the three
+        // lines stay evenly set however long the name is.
+        BigDecimal detailRoomW = tagRight.subtract(detailColumnX).max(BigDecimal.ZERO);
+        String name = details.isEmpty() ? "" : details.get(0);
+        BigDecimal nameFontPt = fittedFontPt(name, settings.getDetailFontPt(), detailRoomW);
+
+        BigDecimal detailW = details.stream()
+                .skip(1)
+                .map(line -> textWidthMm(line, settings.getDetailFontPt()))
+                .reduce(textWidthMm(name, nameFontPt), BigDecimal::max)
+                .max(hasShopLine ? textWidthMm(shop, settings.getDetailFontPt()) : BigDecimal.ZERO)
+                .max(logoSize);
 
         // Side by side when both blocks fit across the tag. When they do not, the
         // details drop below the barcode - but only if the tag is deep enough to
@@ -226,14 +257,18 @@ public record LabelLayout(
         BigDecimal codeY = sideBySide
                 ? originY.add(totalH.subtract(codeH).divide(TWO, 3, RoundingMode.HALF_UP))
                 : originY;
-        BigDecimal barsColumnX = hasSideMark ? originX.add(sideW).add(INNER_GAP_MM) : originX;
+        BigDecimal barsColumnX = hasSideMark ? originX.add(sideStripW) : originX;
         BigDecimal barsY = codeY;
         BigDecimal barsX = barsColumnX.add(barsColumnW.subtract(barcodeW).divide(TWO, 3, RoundingMode.HALF_UP));
 
         if (hasSideMark) {
-            // Centred against the bars, which is the tallest thing beside it.
-            BigDecimal sideY = barsY.add(barcodeH.subtract(sideH).divide(TWO, 3, RoundingMode.HALF_UP));
-            elements.add(new VerticalText(sideMark, originX, sideY, settings.getShopFontPt(), true));
+            // Centred against the bars, which is the tallest thing beside it,
+            // then nudged down by the shop's 5 px.
+            BigDecimal sideY = barsY
+                    .add(barcodeH.subtract(sideH).divide(TWO, 3, RoundingMode.HALF_UP))
+                    .add(SIDE_MARK_DROP_MM);
+            elements.add(new VerticalText(
+                    sideMark, originX.add(SIDE_MARK_INDENT_MM), sideY, settings.getShopFontPt(), true));
         }
         elements.add(new Bars(barcodeModules, moduleMm, barsX, barsY, barcodeH));
 
@@ -261,7 +296,8 @@ public record LabelLayout(
                 // tag in the tray.
                 elements.add(new Text(details.get(line), detailX,
                         lineY.add(detailLineH.multiply(BigDecimal.valueOf(line))),
-                        settings.getDetailFontPt(), line == 0, line == 0 ? Role.NAME : Role.DETAIL));
+                        line == 0 ? nameFontPt : settings.getDetailFontPt(),
+                        line == 0, line == 0 ? Role.NAME : Role.DETAIL));
             }
             if (useLogo) {
                 BigDecimal logoY = detailY.add(detailTextH)
@@ -308,6 +344,42 @@ public record LabelLayout(
             lines.add("Size:" + label.size().trim());
         }
         return lines;
+    }
+
+    /**
+     * How much of the tag the bars may take.
+     *
+     * <p>The left half, less the strip the side mark stands in. The halves are
+     * the shop's rule: bars on the left, description on the right, and a
+     * barcode that crossed the middle would either push the description off
+     * the tag or sit under it.
+     */
+    public static BigDecimal barcodeRoomMm(LabelSettings settings) {
+        BigDecimal half = settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP);
+        String sideMark = settings.getSideMarkText() == null ? "" : settings.getSideMarkText().trim();
+        if (sideMark.isEmpty()) {
+            return half;
+        }
+        return half.subtract(SIDE_MARK_INDENT_MM)
+                .subtract(lineHeightMm(settings.getShopFontPt()))
+                .subtract(INNER_GAP_MM);
+    }
+
+    /**
+     * The largest type the text will fit in, up to the size asked for.
+     *
+     * <p>Width scales with the point size, so the size that fits is the one
+     * asked for scaled by how much too wide the text is. Floored, because past
+     * a point a thermal head prints a grey bar rather than letters.
+     */
+    private static BigDecimal fittedFontPt(String text, BigDecimal fontPt, BigDecimal roomMm) {
+        BigDecimal width = textWidthMm(text, fontPt);
+        if (text.isEmpty() || roomMm.signum() <= 0 || width.compareTo(roomMm) <= 0) {
+            return fontPt;
+        }
+        return fontPt.multiply(roomMm)
+                .divide(width, 2, RoundingMode.DOWN)
+                .max(MIN_NAME_FONT_PT);
     }
 
     /**

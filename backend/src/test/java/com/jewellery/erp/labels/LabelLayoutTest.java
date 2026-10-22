@@ -1,6 +1,7 @@
 package com.jewellery.erp.labels;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.jewellery.erp.labels.dto.LabelDtos;
 import com.jewellery.erp.labels.entity.LabelSettings;
@@ -98,9 +99,10 @@ class LabelLayoutTest {
         LabelLayout.Text purity = text(layout, LabelLayout.Role.PURITY);
         LabelLayout.Text name = text(layout, LabelLayout.Role.NAME);
 
-        // The strip before the bars belongs to the side mark, standing up.
+        // The strip before the bars belongs to the side mark, standing up,
+        // a shade in from the edge - see theSideMarkIsNudged.
         assertThat(side.value()).isEqualTo("TKS");
-        assertThat(side.xMm()).isEqualByComparingTo(settings.getMarginLeftMm());
+        assertThat(side.xMm()).isGreaterThan(settings.getMarginLeftMm());
         assertThat(side.xMm()).isLessThan(bars.xMm());
 
         // The serial still reads under the bars, the purity after it.
@@ -409,26 +411,79 @@ class LabelLayoutTest {
     }
 
     @Test
-    @DisplayName("but a description too wide for the right half follows the bars instead")
-    void aLongDescriptionKeepsItsRoom() {
+    @DisplayName("a name too wide for the right half is set smaller until it fits")
+    void aLongNameIsSetSmaller() {
         LabelSettings settings = tagSettings();
         settings.setShowPurity(false);
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
-        BigDecimal tagLeft = settings.getMarginLeftMm();
-        BigDecimal middle = tagLeft.add(new BigDecimal("30.000"));
-        BigDecimal tagRight = tagLeft.add(settings.getLabelWidthMm());
+        BigDecimal tagRight = settings.getMarginLeftMm().add(settings.getLabelWidthMm());
 
-        // 25 characters at 6 pt come to 30.7 mm: too wide for the 30 mm right
-        // half, and comfortable in the 33.2 mm the bars and side mark leave.
-        LabelDtos.Label wordy = new LabelDtos.Label(1L, "151",
-                null, "Ladies Antique Temple Set", new BigDecimal("77.180"), null,
-                "Silver", "Anklet", "Salangai", "SJ", "AVAILABLE");
-        LabelLayout.Text name = text(layoutOf(wordy, settings), LabelLayout.Role.NAME);
+        // The one that ran off the tag and onto the backing.
+        LabelDtos.Label wordy = new LabelDtos.Label(1L, "376",
+                null, "9.5\" M.Thirukai Model Anklet", new BigDecimal("43.550"), "9.5 inch",
+                "Silver", "Anklet", "Thirukai", "SJ", "AVAILABLE");
+        LabelLayout layout = layoutOf(wordy, settings);
+        LabelLayout.Text name = text(layout, LabelLayout.Role.NAME);
 
-        // It gives up the middle rather than the last few letters.
-        assertThat(name.xMm()).isLessThan(middle);
+        assertThat(name.fontPt()).isLessThan(settings.getDetailFontPt());
         assertThat(name.xMm().add(LabelLayout.textWidthMm(name.value(), name.fontPt())))
                 .isLessThanOrEqualTo(tagRight);
+        // Only the type shrank; the weight below it is set as asked and the
+        // three lines are still evenly spaced.
+        LabelLayout.Text weight = detail(layout, "GMS.43.550");
+        assertThat(weight.fontPt()).isEqualByComparingTo(settings.getDetailFontPt());
+        assertThat(detail(layout, "Size:9.5 inch").yMm().subtract(weight.yMm()))
+                .isEqualByComparingTo(weight.yMm().subtract(name.yMm()));
+    }
+
+    @Test
+    @DisplayName("a name that already fits is left at the size it was asked for")
+    void aShortNameIsLeftAlone() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+
+        LabelLayout.Text name = text(layoutOf(salangai("151"), settings), LabelLayout.Role.NAME);
+        assertThat(name.fontPt()).isEqualByComparingTo(settings.getDetailFontPt());
+    }
+
+    @Test
+    @DisplayName("the bars never cross the middle of the tag")
+    void theBarsKeepToTheLeftHalf() {
+        LabelSettings settings = tagSettings();
+        settings.setMarginLeftMm(new BigDecimal("-20.00"));
+        BigDecimal middle = settings.getMarginLeftMm().add(new BigDecimal("30.000"));
+
+        for (String serial : new String[] {"1", "151", "3130", "905351"}) {
+            LabelLayout.Bars bars = bars(layoutOf(salangai(serial), settings));
+            assertThat(bars.xMm().add(bars.widthMm()))
+                    .as("bars on tag %s", serial)
+                    .isLessThanOrEqualTo(middle);
+        }
+        // And the room the printing side checks against is that same half,
+        // less the strip the side mark stands in.
+        assertThat(LabelLayout.barcodeRoomMm(settings)).isLessThan(new BigDecimal("30.000"));
+    }
+
+    @Test
+    @DisplayName("the side mark is indented and dropped by the shop's 5 px")
+    void theSideMarkIsNudged() {
+        LabelSettings settings = tagSettings();
+        BigDecimal fivePx = new BigDecimal("1.323");
+
+        LabelLayout layout = layoutOf(gold(), settings);
+        LabelLayout.VerticalText side = sideMark(layout);
+        LabelLayout.Bars bars = bars(layout);
+
+        assertThat(side.xMm()).isEqualByComparingTo(settings.getMarginLeftMm().add(fivePx));
+        // Centred on the bars, then dropped: its middle sits 5 px below theirs.
+        BigDecimal sideMiddle = side.yMm()
+                .add(LabelLayout.textWidthMm(side.value(), side.fontPt()).divide(new BigDecimal("2"), 3,
+                        java.math.RoundingMode.HALF_UP));
+        BigDecimal barsMiddle = bars.yMm()
+                .add(bars.heightMm().divide(new BigDecimal("2"), 3, java.math.RoundingMode.HALF_UP));
+        assertThat(sideMiddle.subtract(barsMiddle)).isCloseTo(fivePx, within(new BigDecimal("0.01")));
+        // The indent comes out of the tag, not out of the bars' clear space.
+        assertThat(bars.xMm()).isGreaterThan(side.xMm().add(LabelLayout.lineHeightMm(side.fontPt())));
     }
 
     @Test
