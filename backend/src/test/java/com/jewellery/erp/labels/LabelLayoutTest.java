@@ -384,6 +384,10 @@ class LabelLayoutTest {
     void descriptionDoesNotFollowTheBars() {
         LabelSettings settings = tagSettings();
         settings.setShowPurity(false);
+        // Measured, which is what holds the description still. Without a
+        // measurement it keeps the shop's 10 px after the bars instead, and
+        // moves with them - see theDescriptionSitsTenPixelsAfterTheBars.
+        settings.setSplitLineMm(new BigDecimal("34.00"));
 
         // 151 is three digits and takes 68 modules - an odd digit count forces
         // a code switch - where the four digits of 3130 take 57. Left to
@@ -397,17 +401,18 @@ class LabelLayoutTest {
     }
 
     @Test
-    @DisplayName("and never before the middle of the tag, however short the barcode")
-    void descriptionStartsAtTheMiddleOfTheTag() {
+    @DisplayName("and never before the cut, however short the barcode")
+    void descriptionStartsAfterTheCut() {
         LabelSettings settings = tagSettings();
         settings.setShowPurity(false);
-        BigDecimal middle = settings.getLabelWidthMm().divide(new BigDecimal("2"), 3, java.math.RoundingMode.HALF_UP);
+        settings.setSplitLineMm(new BigDecimal("34.00"));
+        BigDecimal split = settings.getSplitLineMm();
 
         for (String serial : new String[] {"1", "151", "3130", "905351"}) {
             LabelLayout layout = layoutOf(salangai(serial), settings);
             assertThat(text(layout, LabelLayout.Role.NAME).xMm())
                     .as("description on tag %s", serial)
-                    .isGreaterThanOrEqualTo(middle);
+                    .isGreaterThanOrEqualTo(split);
         }
     }
 
@@ -433,9 +438,9 @@ class LabelLayoutTest {
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
         BigDecimal tagRight = settings.getMarginLeftMm().add(settings.getLabelWidthMm());
 
-        // 26 characters at 6 pt is 31.9 mm, just over the 30 mm right half,
-        // and 25.5 mm once it is set a fifth smaller.
-        LabelLayout layout = layoutOf(named("Silver Design Thandai Pair"), settings);
+        // 32 characters at 6 pt is 39.3 mm, over the 34.9 mm the bars leave
+        // after their 10 px, and 31.4 mm once set a fifth smaller.
+        LabelLayout layout = layoutOf(named("Silver Design Thandai Anklet Set"), settings);
         List<LabelLayout.Text> lines = nameLines(layout);
 
         assertThat(lines).hasSize(1);
@@ -531,21 +536,46 @@ class LabelLayoutTest {
     }
 
     @Test
-    @DisplayName("the description starts just after the split line, not at the middle")
-    void theDescriptionFollowsTheSplit() {
+    @DisplayName("the description sits the shop's 10 px after the barcode column")
+    void theDescriptionSitsTenPixelsAfterTheBars() {
         LabelSettings settings = tagSettings();
         settings.setShowPurity(false);
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
-        settings.setSplitLineMm(new BigDecimal("24.50"));
-        BigDecimal split = settings.getMarginLeftMm().add(settings.getSplitLineMm());
+        BigDecimal tenPx = new BigDecimal("2.646");
 
         for (String serial : new String[] {"1", "151", "3130"}) {
-            BigDecimal x = text(layoutOf(salangai(serial), settings), LabelLayout.Role.NAME).xMm();
-            assertThat(x).as("description on tag %s", serial).isGreaterThan(split);
-            // Just after: within a millimetre of the cut, and the same on
-            // every tag whatever its serial encoded to.
-            assertThat(x.subtract(split)).isLessThanOrEqualTo(BigDecimal.ONE);
+            LabelLayout layout = layoutOf(salangai(serial), settings);
+            LabelLayout.Bars bars = bars(layout);
+            BigDecimal x = text(layout, LabelLayout.Role.NAME).xMm();
+            // The column, not the bars: the serial reads underneath them and
+            // can be the wider of the two, so the gap is measured from
+            // whichever reaches further right.
+            BigDecimal column = bars.xMm().add(bars.widthMm())
+                    .max(text(layout, LabelLayout.Role.SERIAL).xMm()
+                            .add(LabelLayout.textWidthMm(serial, settings.getSerialFontPt())));
+            assertThat(x.subtract(column)).as("gap on tag %s", serial)
+                    .isCloseTo(tenPx, within(new BigDecimal("0.4")));
         }
+    }
+
+    @Test
+    @DisplayName("a measured split still pushes the description past the cut")
+    void aMeasuredSplitStillWins() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+        settings.setMarginLeftMm(new BigDecimal("-20.00"));
+
+        BigDecimal unmeasured = text(layoutOf(salangai("151"), settings), LabelLayout.Role.NAME).xMm();
+
+        // A cut further right than the bars plus their 10 px: the cut wins,
+        // because the description belongs to the panel after it.
+        settings.setSplitLineMm(new BigDecimal("34.00"));
+        BigDecimal split = settings.getMarginLeftMm().add(settings.getSplitLineMm());
+        BigDecimal measured = text(layoutOf(salangai("151"), settings), LabelLayout.Role.NAME).xMm();
+
+        assertThat(measured).isGreaterThan(unmeasured);
+        assertThat(measured).isGreaterThan(split);
+        assertThat(measured.subtract(split)).isLessThanOrEqualTo(BigDecimal.ONE);
     }
 
     @Test
@@ -591,10 +621,11 @@ class LabelLayoutTest {
         // 20 mm before the tag, so the origin is off the front of it.
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
 
+        settings.setSplitLineMm(new BigDecimal("30.00"));
         LabelLayout layout = layoutOf(salangai("151"), settings);
-        // 20 mm before the tag, plus half of 60 for the unmeasured split, plus
-        // the half-millimetre that keeps the text off the cut - the tag's own
-        // middle, not the 30 mm that measuring from the origin would give.
+        // 20 mm before the tag, plus the 30 mm cut, plus the half-millimetre
+        // that keeps the text off it - measured from the tag's own edge, not
+        // the 30 mm that measuring from the origin would give.
         assertThat(text(layout, LabelLayout.Role.NAME).xMm()).isEqualByComparingTo("10.500");
         assertThat(layout.sideBySide()).isTrue();
     }

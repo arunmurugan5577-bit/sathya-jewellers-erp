@@ -121,6 +121,16 @@ public record LabelLayout(
     /** Code 128's own quiet zone: ten narrow bars, either side of the symbol. */
     private static final BigDecimal QUIET_ZONE_MODULES = BigDecimal.TEN;
 
+    /**
+     * Between the barcode column and the description after it.
+     *
+     * <p>The 10 px the shop asked for, which is 2.646 mm at the 96 dpi a
+     * browser calls a pixel. Measured from the whole column rather than the
+     * bars, because the serial and its purity read underneath them and can be
+     * the wider of the two.
+     */
+    private static final BigDecimal TEXT_GAP_MM = new BigDecimal("2.646");
+
     /** Between the serial number and the purity. */
     private static final BigDecimal IDENT_GAP_MM = new BigDecimal("1");
     /** Under the bars, before the serial number. */
@@ -210,10 +220,58 @@ public record LabelLayout(
         // reading as one column whatever its serial came to.
         BigDecimal tagLeft = tagLeftMm(settings);
         BigDecimal tagRight = tagLeft.add(settings.getLabelWidthMm());
-        BigDecimal detailColumnX = tagLeft.add(splitLineMm(settings)).add(SPLIT_GAP_MM);
-        BigDecimal detailRoomW = tagRight.subtract(detailColumnX).max(BigDecimal.ZERO);
-
+        BigDecimal barsColumnEnd = originX
+                .add(hasSideMark ? sideStripW : BigDecimal.ZERO)
+                .add(barsColumnW);
+        BigDecimal detailColumnX = barsColumnEnd.add(TEXT_GAP_MM);
+        // Past the cut when the cut has been measured, and only then. An
+        // unmeasured split falls back to the middle of the tag for the bars'
+        // own limit, but the middle is a guess, and pinning the description
+        // to a guess left it floating 8 mm clear of the bars.
+        if (settings.getSplitLineMm() != null && settings.getSplitLineMm().signum() > 0) {
+            detailColumnX = detailColumnX.max(
+                    tagLeft.add(settings.getSplitLineMm()).add(SPLIT_GAP_MM));
+        }
         BigDecimal detailLineH = lineHeightMm(settings.getDetailFontPt());
+
+        // Whether the description sits beside the bars is settled here, on
+        // what it would measure at the size it was asked for - before any of
+        // the fitting below.
+        //
+        // It has to be. The fitting shrinks and wraps the name to whatever
+        // room is left, so asking afterwards whether the block fits is asking
+        // a question that has already been answered yes. On a 25 mm tag that
+        // reasoning squeezed "Womens Ring" into W / O / M, one letter a line
+        // at 3 pt, and called it a fit.
+        BigDecimal naturalDetailW = details.stream()
+                .map(line -> textWidthMm(line, settings.getDetailFontPt()))
+                .reduce(BigDecimal.ZERO, BigDecimal::max)
+                .max(shop.isEmpty() ? BigDecimal.ZERO : textWidthMm(shop, settings.getDetailFontPt()))
+                .max(logoSize);
+
+        // Side by side when both blocks fit across the tag. When they do not,
+        // the details drop below the barcode - but only if the tag is deep
+        // enough to hold them. On a tag as shallow as this shop's, stacking
+        // would run the last line off the bottom edge and lose it, so the
+        // blocks stay side by side and the overflow goes sideways, where it
+        // is still readable. Either way the fix is the same: a smaller detail
+        // font, or a longer head.
+        boolean hasDetailBlock = !shop.isEmpty() || !details.isEmpty() || useLogo;
+        BigDecimal logoExtra = useLogo
+                ? (details.isEmpty() ? BigDecimal.ZERO : LOGO_TOP_MM).add(logoSize)
+                : BigDecimal.ZERO;
+        BigDecimal naturalStackedH = codeH.add(IDENT_TOP_MM)
+                .add(detailLineH.multiply(BigDecimal.valueOf(details.size() + (shop.isEmpty() ? 0 : 1))))
+                .add(logoExtra);
+        boolean sideBySide = !hasDetailBlock
+                || detailColumnX.subtract(originX).add(naturalDetailW).compareTo(contentW) <= 0
+                || naturalStackedH.compareTo(contentH) > 0;
+
+        // Stacked, the description has the whole width of the tag instead.
+        if (!sideBySide) {
+            detailColumnX = originX;
+        }
+        BigDecimal detailRoomW = tagRight.subtract(detailColumnX).max(BigDecimal.ZERO);
 
         // The description gets the rest of the tag, and is made to stay on it.
         //
@@ -251,10 +309,6 @@ public record LabelLayout(
         }
 
         BigDecimal linesH = detailLineH.multiply(BigDecimal.valueOf(detailLines.size()));
-        // The logo is the last thing in the detail column, under the size line.
-        BigDecimal logoExtra = useLogo
-                ? (details.isEmpty() ? BigDecimal.ZERO : LOGO_TOP_MM).add(logoSize)
-                : BigDecimal.ZERO;
 
         // The short name heads this column in the column's own type size, not
         // its own: it belongs to the block it sits on top of, and the smaller
@@ -273,25 +327,10 @@ public record LabelLayout(
 
         BigDecimal detailTextH = linesH.add(hasShopLine ? shopLineH : BigDecimal.ZERO);
         BigDecimal detailH = detailTextH.add(logoExtra);
-        boolean hasDetailBlock = hasShopLine || !details.isEmpty() || useLogo;
 
-        BigDecimal detailW = detailLines.stream()
-                .map(line -> textWidthMm(line.text(), line.fontPt()))
-                .reduce(BigDecimal.ZERO, BigDecimal::max)
-                .max(hasShopLine ? textWidthMm(shop, settings.getDetailFontPt()) : BigDecimal.ZERO)
-                .max(logoSize);
-
-        // Side by side when both blocks fit across the tag. When they do not, the
-        // details drop below the barcode - but only if the tag is deep enough to
-        // hold them. On a tag as shallow as this shop's, stacking would run the
-        // last line off the bottom edge and lose it, so the blocks stay side by
-        // side and the overflow goes sideways, where it is still readable. Either
-        // way the fix is the same: a smaller detail font, or a longer head.
-        BigDecimal stackedH = codeH.add(IDENT_TOP_MM).add(detailH);
-        boolean sideBySide = !hasDetailBlock
-                || detailColumnX.subtract(originX).add(detailW).compareTo(contentW) <= 0
-                || stackedH.compareTo(contentH) > 0;
-        BigDecimal totalH = sideBySide ? codeH.max(detailH) : stackedH;
+        BigDecimal totalH = sideBySide
+                ? codeH.max(detailH)
+                : codeH.add(IDENT_TOP_MM).add(detailH);
 
         BigDecimal originY = settings.getMarginTopMm()
                 .add(contentH.subtract(totalH).max(BigDecimal.ZERO).divide(TWO, 3, RoundingMode.HALF_UP));
@@ -325,7 +364,8 @@ public record LabelLayout(
         }
 
         if (hasDetailBlock) {
-            BigDecimal detailX = sideBySide ? detailColumnX : originX;
+            // Already the origin when the blocks are stacked.
+            BigDecimal detailX = detailColumnX;
             BigDecimal detailY = sideBySide
                     ? originY.add(totalH.subtract(detailH).divide(TWO, 3, RoundingMode.HALF_UP))
                     : codeY.add(codeH).add(IDENT_TOP_MM);
