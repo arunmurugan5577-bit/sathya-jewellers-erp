@@ -124,12 +124,12 @@ public record LabelLayout(
     /**
      * Between the barcode column and the description after it.
      *
-     * <p>The 10 px the shop asked for, which is 2.646 mm at the 96 dpi a
+     * <p>The 15 px the shop asked for, which is 3.969 mm at the 96 dpi a
      * browser calls a pixel. Measured from the whole column rather than the
      * bars, because the serial and its purity read underneath them and can be
      * the wider of the two.
      */
-    private static final BigDecimal TEXT_GAP_MM = new BigDecimal("2.646");
+    private static final BigDecimal TEXT_GAP_MM = new BigDecimal("3.969");
 
     /** Between the serial number and the purity. */
     private static final BigDecimal IDENT_GAP_MM = new BigDecimal("1");

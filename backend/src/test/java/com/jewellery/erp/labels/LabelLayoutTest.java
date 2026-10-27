@@ -536,12 +536,12 @@ class LabelLayoutTest {
     }
 
     @Test
-    @DisplayName("the description sits the shop's 10 px after the barcode column")
-    void theDescriptionSitsTenPixelsAfterTheBars() {
+    @DisplayName("the description sits the shop's 15 px after the barcode column")
+    void theDescriptionSitsFifteenPixelsAfterTheBars() {
         LabelSettings settings = tagSettings();
         settings.setShowPurity(false);
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
-        BigDecimal tenPx = new BigDecimal("2.646");
+        BigDecimal fifteenPx = new BigDecimal("3.969");
 
         for (String serial : new String[] {"1", "151", "3130"}) {
             LabelLayout layout = layoutOf(salangai(serial), settings);
@@ -554,7 +554,7 @@ class LabelLayoutTest {
                     .max(text(layout, LabelLayout.Role.SERIAL).xMm()
                             .add(LabelLayout.textWidthMm(serial, settings.getSerialFontPt())));
             assertThat(x.subtract(column)).as("gap on tag %s", serial)
-                    .isCloseTo(tenPx, within(new BigDecimal("0.4")));
+                    .isCloseTo(fifteenPx, within(new BigDecimal("0.4")));
         }
     }
 
@@ -567,7 +567,7 @@ class LabelLayoutTest {
 
         BigDecimal unmeasured = text(layoutOf(salangai("151"), settings), LabelLayout.Role.NAME).xMm();
 
-        // A cut further right than the bars plus their 10 px: the cut wins,
+        // A cut further right than the bars plus their 15 px: the cut wins,
         // because the description belongs to the panel after it.
         settings.setSplitLineMm(new BigDecimal("34.00"));
         BigDecimal split = settings.getMarginLeftMm().add(settings.getSplitLineMm());
