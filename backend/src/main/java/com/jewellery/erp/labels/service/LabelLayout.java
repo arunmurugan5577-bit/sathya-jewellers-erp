@@ -72,14 +72,6 @@ public record LabelLayout(
     /** Between the short name and the bars. */
     private static final BigDecimal INNER_GAP_MM = new BigDecimal("1.2");
     /**
-     * Between the barcode block and the details block.
-     *
-     * <p>Widened from 3 mm by the 10 px the shop asked for - 2.646 mm at the
-     * 96 dpi a browser calls a pixel. At 3 mm the weight ran close enough to
-     * the bars to read as part of them on a tag only 12 mm deep.
-     */
-    private static final BigDecimal BLOCK_GAP_MM = new BigDecimal("5.65");
-    /**
      * The side mark's own nudge: 5 px right and 5 px down, at the 96 dpi a
      * browser calls a pixel.
      *
@@ -116,6 +108,18 @@ public record LabelLayout(
 
     /** A name is a name, not a paragraph; past this the tag is the wrong size. */
     private static final int MAX_NAME_LINES = 3;
+
+    /**
+     * Between the split line and the first letter after it.
+     *
+     * <p>Enough that the description does not sit on the cut, and no more:
+     * the right panel is narrow and every millimetre spent here is one the
+     * name does not have. Half a millimetre is four dots at 203 dpi.
+     */
+    private static final BigDecimal SPLIT_GAP_MM = new BigDecimal("0.5");
+
+    /** Code 128's own quiet zone: ten narrow bars, either side of the symbol. */
+    private static final BigDecimal QUIET_ZONE_MODULES = BigDecimal.TEN;
 
     /** Between the serial number and the purity. */
     private static final BigDecimal IDENT_GAP_MM = new BigDecimal("1");
@@ -178,34 +182,35 @@ public record LabelLayout(
         BigDecimal contentW = settings.getContentWidthMm().subtract(settings.getMarginLeftMm().multiply(TWO));
         BigDecimal contentH = settings.getContentHeightMm().subtract(settings.getMarginTopMm().multiply(TWO));
 
-        // The side mark takes the strip before the bars when there is room for
-        // it, and is dropped when there is not. Narrowing the bars to make it
-        // fit is how a barcode stops scanning, so that is never an option.
+        // The side mark takes the strip before the bars when the left panel
+        // has room for both, and is dropped when it has not. Narrowing the
+        // bars to make it fit is how a barcode stops scanning, so that is
+        // never an option - and the panel, not the whole tag, is what they
+        // have to share, because the bars stop at the split line.
         BigDecimal sideStripW = SIDE_MARK_INDENT_MM.add(sideW).add(INNER_GAP_MM);
+        // Against the panel itself, not the room the bars get. The quiet zone
+        // is clear space a scanner needs around the bars; the serial reading
+        // underneath them may sit closer to the cut than that, and often is
+        // the wider of the two once a purity follows it.
         boolean hasSideMark = !sideMark.isEmpty()
-                && sideStripW.add(barsColumnW).compareTo(contentW) <= 0;
-        BigDecimal codeW = hasSideMark ? sideStripW.add(barsColumnW) : barsColumnW;
+                && sideStripW.add(barsColumnW).compareTo(splitLineMm(settings)) <= 0;
         BigDecimal codeH = barcodeH.add(IDENT_TOP_MM).add(identH);
 
         BigDecimal originX = settings.getMarginLeftMm();
 
-        // Where the detail column starts, and it is the same on every tag.
+        // Where the detail column starts: just past the tag's split line.
         //
-        // A barcode's width follows what the serial encodes to, not how long it
-        // looks: 151 is three digits and takes 68 modules, because an odd digit
-        // count forces a code switch, where the four digits of 3130 take 57.
-        // Letting the text follow the bars put the two tags' descriptions 2.75
-        // mm apart in a tray that should read as one column, so the gap after
-        // the bars takes up the slack instead and the text stays put.
-        //
-        // The column also never begins before the middle of the tag. That is
-        // the shop's rule and it is a sound one: the left half is the barcode's
-        // and the right half is the description's, so a scanner's aim and a
-        // jeweller's eye each have a side of the tag to themselves.
+        // The tag is die-cut into two panels and the description belongs to
+        // the right one, so it begins a whisker after the cut rather than
+        // wherever the bars happen to end. That also settles a second thing:
+        // a barcode's width follows what the serial encodes to, not how long
+        // it looks - 151 is three digits and takes 68 modules, because an odd
+        // digit count forces a code switch, where the four digits of 3130
+        // take 57 - and measuring from the cut keeps every tag in a tray
+        // reading as one column whatever its serial came to.
         BigDecimal tagLeft = tagLeftMm(settings);
         BigDecimal tagRight = tagLeft.add(settings.getLabelWidthMm());
-        BigDecimal detailMinX = tagLeft.add(settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP));
-        BigDecimal detailColumnX = originX.add(codeW).add(BLOCK_GAP_MM).max(detailMinX);
+        BigDecimal detailColumnX = tagLeft.add(splitLineMm(settings)).add(SPLIT_GAP_MM);
         BigDecimal detailRoomW = tagRight.subtract(detailColumnX).max(BigDecimal.ZERO);
 
         BigDecimal detailLineH = lineHeightMm(settings.getDetailFontPt());
@@ -383,22 +388,46 @@ public record LabelLayout(
     }
 
     /**
+     * Where the tag's split line falls, from its left edge.
+     *
+     * <p>Unset until the shop measures its own stock, and the middle of the
+     * tag until then - which is where the layout assumed it was.
+     */
+    public static BigDecimal splitLineMm(LabelSettings settings) {
+        BigDecimal split = settings.getSplitLineMm();
+        return split == null || split.signum() <= 0
+                ? settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP)
+                : split;
+    }
+
+    /**
      * How much of the tag the bars may take.
      *
-     * <p>The left half, less the strip the side mark stands in. The halves are
-     * the shop's rule: bars on the left, description on the right, and a
-     * barcode that crossed the middle would either push the description off
-     * the tag or sit under it.
+     * <p>Everything up to the split line, less the strip the side mark stands
+     * in and the quiet zone the symbology needs. A bar printed across a cut
+     * is a bar a scanner reads as two, so nothing is allowed over the line -
+     * and nothing is allowed within a quiet zone of it either, because a
+     * scanner needs to see clear tag before the first bar and after the last.
      */
     public static BigDecimal barcodeRoomMm(LabelSettings settings) {
-        BigDecimal half = settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP);
+        BigDecimal room = splitLineMm(settings).subtract(quietZoneMm(settings).multiply(TWO));
         String sideMark = settings.getSideMarkText() == null ? "" : settings.getSideMarkText().trim();
-        if (sideMark.isEmpty()) {
-            return half;
+        if (!sideMark.isEmpty()) {
+            room = room.subtract(SIDE_MARK_INDENT_MM)
+                    .subtract(lineHeightMm(settings.getShopFontPt()))
+                    .subtract(INNER_GAP_MM);
         }
-        return half.subtract(SIDE_MARK_INDENT_MM)
-                .subtract(lineHeightMm(settings.getShopFontPt()))
-                .subtract(INNER_GAP_MM);
+        return room.max(BigDecimal.ZERO);
+    }
+
+    /**
+     * The clear space Code 128 wants either side of the bars.
+     *
+     * <p>Ten times the narrow bar, which is the symbology's own figure. At
+     * the shop's 0.25 mm bar that is 2.5 mm.
+     */
+    public static BigDecimal quietZoneMm(LabelSettings settings) {
+        return settings.getBarcodeModuleMm().multiply(QUIET_ZONE_MODULES);
     }
 
     /** One line of the detail column, with the type it is set in. */

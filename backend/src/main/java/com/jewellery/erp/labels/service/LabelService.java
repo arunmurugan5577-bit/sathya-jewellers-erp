@@ -108,6 +108,7 @@ public class LabelService {
         settings.setLabelsAcross(request.labelsAcross());
         settings.setContentWidthMm(request.contentWidthMm());
         settings.setContentHeightMm(request.contentHeightMm());
+        settings.setSplitLineMm(request.splitLineMm());
         settings.setMarginTopMm(request.marginTopMm());
         settings.setMarginLeftMm(request.marginLeftMm());
         settings.setOffsetXMm(request.offsetXMm());
@@ -310,15 +311,20 @@ public class LabelService {
             // A long serial number makes a wide barcode. Better to say so now than
             // to print a tag whose bars run off the edge, or get squeezed until no
             // scanner will read them.
-            // The short name moves above the barcode when it will not fit beside it,
-            // so the barcode only has to fit the tag's own printable width.
+            // The bars have the panel before the tag's split line, less the
+            // quiet zone a scanner needs either side of them. Refused rather
+            // than squeezed: a narrowed bar is how a barcode stops scanning,
+            // and a tag that will not scan is worse than one not printed.
             BigDecimal barcodeWidth = barcodeRenderer.widthMm(serial, settings.getBarcodeModuleMm());
             BigDecimal available = LabelLayout.barcodeRoomMm(settings);
             if (barcodeWidth.compareTo(available) > 0) {
                 problems.add(new LabelDtos.Problem(id, serial,
-                        ("The barcode for %s needs %s mm but only %s mm fits in the left half of the tag. "
+                        ("The barcode for %s needs %s mm but only %s mm fits before the tag's split line "
+                                + "at %s mm, once the %s mm quiet zone either side is allowed for. "
                                 + "Lower the narrow bar width in label settings, or use wider tags.")
-                                .formatted(serial, scale(barcodeWidth), scale(available))));
+                                .formatted(serial, scale(barcodeWidth), scale(available),
+                                        scale(LabelLayout.splitLineMm(settings)),
+                                        scale(LabelLayout.quietZoneMm(settings)))));
                 continue;
             }
 
@@ -413,6 +419,7 @@ public class LabelService {
                 settings.getLabelsAcross(),
                 settings.getContentWidthMm(),
                 settings.getContentHeightMm(),
+                settings.getSplitLineMm(),
                 settings.getMarginTopMm(),
                 settings.getMarginLeftMm(),
                 settings.getOffsetXMm(),

@@ -498,20 +498,65 @@ class LabelLayoutTest {
     }
 
     @Test
-    @DisplayName("the bars never cross the middle of the tag")
-    void theBarsKeepToTheLeftHalf() {
+    @DisplayName("the bars and their quiet zone stay on their side of the split")
+    void theBarsKeepToTheirSideOfTheSplit() {
         LabelSettings settings = tagSettings();
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
-        BigDecimal middle = settings.getMarginLeftMm().add(new BigDecimal("30.000"));
+        settings.setSplitLineMm(new BigDecimal("28.00"));
+        BigDecimal split = settings.getMarginLeftMm().add(settings.getSplitLineMm());
+        BigDecimal quiet = LabelLayout.quietZoneMm(settings);
+        BigDecimal room = LabelLayout.barcodeRoomMm(settings);
 
-        for (String serial : new String[] {"1", "151", "3130", "905351"}) {
+        for (String serial : new String[] {"1", "151", "3130"}) {
             LabelLayout.Bars bars = bars(layoutOf(salangai(serial), settings));
-            assertThat(bars.xMm().add(bars.widthMm()))
-                    .as("bars on tag %s", serial)
-                    .isLessThanOrEqualTo(middle);
+            assertThat(bars.widthMm()).as("the printing side lets %s through", serial)
+                    .isLessThanOrEqualTo(room);
+            assertThat(bars.xMm().add(bars.widthMm()).add(quiet))
+                    .as("bars on tag %s, with their quiet zone", serial)
+                    .isLessThanOrEqualTo(split);
         }
-        // And the room the printing side checks against is that same half,
-        // less the strip the side mark stands in.
+    }
+
+    @Test
+    @DisplayName("a split too close for the bars and their quiet zone is refused, not squeezed")
+    void aTightSplitLeavesTooLittleRoom() {
+        LabelSettings settings = tagSettings();
+        settings.setSplitLineMm(new BigDecimal("24.50"));
+
+        // 24.5 mm of panel, less 5 mm of quiet zone and the 5.49 mm strip the
+        // side mark stands in, leaves 14 mm - and three digits need 17 mm.
+        BigDecimal room = LabelLayout.barcodeRoomMm(settings);
+        BigDecimal needed = new Code128Renderer().widthMm("151", settings.getBarcodeModuleMm());
+        assertThat(room).isLessThan(needed);
+    }
+
+    @Test
+    @DisplayName("the description starts just after the split line, not at the middle")
+    void theDescriptionFollowsTheSplit() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+        settings.setMarginLeftMm(new BigDecimal("-20.00"));
+        settings.setSplitLineMm(new BigDecimal("24.50"));
+        BigDecimal split = settings.getMarginLeftMm().add(settings.getSplitLineMm());
+
+        for (String serial : new String[] {"1", "151", "3130"}) {
+            BigDecimal x = text(layoutOf(salangai(serial), settings), LabelLayout.Role.NAME).xMm();
+            assertThat(x).as("description on tag %s", serial).isGreaterThan(split);
+            // Just after: within a millimetre of the cut, and the same on
+            // every tag whatever its serial encoded to.
+            assertThat(x.subtract(split)).isLessThanOrEqualTo(BigDecimal.ONE);
+        }
+    }
+
+    @Test
+    @DisplayName("an unmeasured split line still means the middle of the tag")
+    void theSplitDefaultsToTheMiddle() {
+        LabelSettings settings = tagSettings();
+        settings.setSplitLineMm(null);
+
+        assertThat(LabelLayout.splitLineMm(settings)).isEqualByComparingTo("30.000");
+        // And the room for the bars is that, less the quiet zones and the
+        // strip the side mark stands in.
         assertThat(LabelLayout.barcodeRoomMm(settings)).isLessThan(new BigDecimal("30.000"));
     }
 
@@ -547,9 +592,10 @@ class LabelLayoutTest {
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
 
         LabelLayout layout = layoutOf(salangai("151"), settings);
-        // 20 mm before the tag plus half of 60 - the tag's own middle, not the
-        // 30 mm that measuring from the origin would give.
-        assertThat(text(layout, LabelLayout.Role.NAME).xMm()).isEqualByComparingTo("10.000");
+        // 20 mm before the tag, plus half of 60 for the unmeasured split, plus
+        // the half-millimetre that keeps the text off the cut - the tag's own
+        // middle, not the 30 mm that measuring from the origin would give.
+        assertThat(text(layout, LabelLayout.Role.NAME).xMm()).isEqualByComparingTo("10.500");
         assertThat(layout.sideBySide()).isTrue();
     }
 

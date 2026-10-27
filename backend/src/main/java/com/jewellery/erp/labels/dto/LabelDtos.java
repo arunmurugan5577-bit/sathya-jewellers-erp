@@ -164,6 +164,9 @@ public final class LabelDtos {
             @Schema(example = "5", description = "Tags side by side across the roll") short labelsAcross,
             @Schema(description = "Printable length of the tag, from its left edge") BigDecimal contentWidthMm,
             @Schema(description = "Printable height at the top of each tag") BigDecimal contentHeightMm,
+            @Schema(description = "Distance from the tag's left edge to its die-cut split line. "
+                    + "Empty means the middle of the tag.")
+            BigDecimal splitLineMm,
             BigDecimal marginTopMm,
             BigDecimal marginLeftMm,
             BigDecimal offsetXMm,
@@ -214,6 +217,12 @@ public final class LabelDtos {
             @NotNull @DecimalMin(value = "2", message = "Printable height must be at least 2 mm")
             @DecimalMax(value = "200", message = "Printable height must not exceed 200 mm")
             @Digits(integer = 4, fraction = 2) BigDecimal contentHeightMm,
+
+            // Optional: the shop measures it off its own roll, and until it
+            // does the middle of the tag is assumed, as it always was.
+            @Schema(example = "24.5", description = "Where the tag's split line falls, from its left edge")
+            @DecimalMin(value = "1", message = "The split line must be at least 1 mm from the edge")
+            @Digits(integer = 4, fraction = 2) BigDecimal splitLineMm,
 
             @NotNull @DecimalMin(value = "0", message = "Top margin cannot be negative")
             @Digits(integer = 4, fraction = 2) BigDecimal marginTopMm,

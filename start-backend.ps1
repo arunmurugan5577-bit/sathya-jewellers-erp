@@ -80,5 +80,5 @@ New-Item -ItemType Directory -Force -Path $socketTmp | Out-Null
 & $java `
     "-Djdk.net.unixdomain.tmpdir=$socketTmp" `
     '-Dspring.flyway.baseline-on-migrate=true' `
-    '-Dspring.flyway.baseline-version=31' `
+    '-Dspring.flyway.baseline-version=32' `
     '-jar' $jar

@@ -117,6 +117,15 @@ import { LabelsApiService } from './labels-api.service';
           <app-field-error [control]="form.controls.contentHeightMm" label="Printable height" />
         </div>
         <div class="field">
+          <label class="field__label" for="splitLineMm">Split line (mm)</label>
+          <input id="splitLineMm" class="input numeric" type="number" step="0.5" formControlName="splitLineMm" />
+          <p class="field__hint">
+            Where the tag is cut, measured from its left edge. The barcode stays before it and the
+            description starts just after. Leave empty for the middle of the tag.
+          </p>
+          <app-field-error [control]="form.controls.splitLineMm" label="Split line" />
+        </div>
+        <div class="field">
           <label class="field__label" for="marginTopMm">Top margin (mm)</label>
           <input id="marginTopMm" class="input numeric" type="number" step="0.5" formControlName="marginTopMm" />
         </div>
@@ -238,6 +247,9 @@ export class LabelSettingsComponent implements OnInit {
     labelsAcross: [1, [Validators.required, Validators.min(1), Validators.max(10)]],
     contentWidthMm: [50, [Validators.required, Validators.min(5), Validators.max(400)]],
     contentHeightMm: [25, [Validators.required, Validators.min(2), Validators.max(200)]],
+    // Optional on purpose: empty means the middle of the tag, which is what
+    // the layout assumed before anyone measured a roll.
+    splitLineMm: [null as number | null, [Validators.min(1), Validators.max(200)]],
     marginTopMm: [2, [Validators.required, Validators.min(0)]],
     marginLeftMm: [2, [Validators.required, Validators.min(-200), Validators.max(200)]],
     offsetXMm: [0, [Validators.required, Validators.min(-20), Validators.max(20)]],
@@ -267,6 +279,7 @@ export class LabelSettingsComponent implements OnInit {
       labelsAcross: Number(current.labelsAcross),
       contentWidthMm: Number(current.contentWidthMm),
       contentHeightMm: Number(current.contentHeightMm),
+      splitLineMm: current.splitLineMm == null ? null : Number(current.splitLineMm),
       marginTopMm: Number(current.marginTopMm),
       marginLeftMm: Number(current.marginLeftMm),
       offsetXMm: Number(current.offsetXMm),

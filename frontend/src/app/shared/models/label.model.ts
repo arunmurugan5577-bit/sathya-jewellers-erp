@@ -65,6 +65,13 @@ export interface LabelSettings {
   contentWidthMm: number;
   /** Printable height at the top of each tag - the head of a dumbbell tag. */
   contentHeightMm: number;
+  /**
+   * Where the tag's die-cut split line falls, from its left edge.
+   *
+   * <p>The barcode keeps to the left of it and the description starts just to
+   * the right. Null means the middle of the tag.
+   */
+  splitLineMm?: number | null;
   marginTopMm: number;
   marginLeftMm: number;
   offsetXMm: number;

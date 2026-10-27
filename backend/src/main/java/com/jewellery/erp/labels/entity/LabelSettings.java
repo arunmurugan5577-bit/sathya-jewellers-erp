@@ -65,6 +65,17 @@ public class LabelSettings extends AuditableEntity {
     @Column(name = "content_height_mm", nullable = false, precision = 6, scale = 2)
     private BigDecimal contentHeightMm;
 
+    /**
+     * Where the tag's die-cut split line falls, measured from its left edge.
+     *
+     * <p>The barcode keeps to the left of it and the description begins just
+     * to the right, so the two panels of the tag read as the two panels they
+     * are. Null means the middle of the tag, which is what the layout assumed
+     * before this was measurable.
+     */
+    @Column(name = "split_line_mm", precision = 6, scale = 2)
+    private BigDecimal splitLineMm;
+
     @Column(name = "margin_top_mm", nullable = false, precision = 6, scale = 2)
     private BigDecimal marginTopMm;
 
