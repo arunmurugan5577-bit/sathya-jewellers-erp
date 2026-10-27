@@ -9,6 +9,7 @@ import com.jewellery.erp.labels.entity.ShopMark;
 import com.jewellery.erp.labels.service.Code128Renderer;
 import com.jewellery.erp.labels.service.LabelLayout;
 import java.math.BigDecimal;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -410,30 +411,80 @@ class LabelLayoutTest {
         }
     }
 
+    /** Every line of the name, top to bottom. */
+    private static List<LabelLayout.Text> nameLines(LabelLayout layout) {
+        return layout.elements().stream()
+                .filter(LabelLayout.Text.class::isInstance)
+                .map(LabelLayout.Text.class::cast)
+                .filter(t -> t.role() == LabelLayout.Role.NAME)
+                .toList();
+    }
+
+    private static LabelDtos.Label named(String name) {
+        return new LabelDtos.Label(1L, "376", null, name, new BigDecimal("43.550"), null,
+                "Silver", "Anklet", "Thirukai", "SJ", "AVAILABLE");
+    }
+
     @Test
-    @DisplayName("a name too wide for the right half is set smaller until it fits")
-    void aLongNameIsSetSmaller() {
+    @DisplayName("a name a shade too long is set a shade smaller and stays on one line")
+    void aSlightlyLongNameIsSetSmaller() {
         LabelSettings settings = tagSettings();
         settings.setShowPurity(false);
         settings.setMarginLeftMm(new BigDecimal("-20.00"));
         BigDecimal tagRight = settings.getMarginLeftMm().add(settings.getLabelWidthMm());
 
-        // The one that ran off the tag and onto the backing.
-        LabelDtos.Label wordy = new LabelDtos.Label(1L, "376",
-                null, "9.5\" M.Thirukai Model Anklet", new BigDecimal("43.550"), "9.5 inch",
-                "Silver", "Anklet", "Thirukai", "SJ", "AVAILABLE");
-        LabelLayout layout = layoutOf(wordy, settings);
-        LabelLayout.Text name = text(layout, LabelLayout.Role.NAME);
+        // 26 characters at 6 pt is 31.9 mm, just over the 30 mm right half,
+        // and 25.5 mm once it is set a fifth smaller.
+        LabelLayout layout = layoutOf(named("Silver Design Thandai Pair"), settings);
+        List<LabelLayout.Text> lines = nameLines(layout);
 
-        assertThat(name.fontPt()).isLessThan(settings.getDetailFontPt());
-        assertThat(name.xMm().add(LabelLayout.textWidthMm(name.value(), name.fontPt())))
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0).fontPt()).isLessThan(settings.getDetailFontPt());
+        assertThat(lines.get(0).xMm().add(
+                LabelLayout.textWidthMm(lines.get(0).value(), lines.get(0).fontPt())))
                 .isLessThanOrEqualTo(tagRight);
-        // Only the type shrank; the weight below it is set as asked and the
-        // three lines are still evenly spaced.
-        LabelLayout.Text weight = detail(layout, "GMS.43.550");
-        assertThat(weight.fontPt()).isEqualByComparingTo(settings.getDetailFontPt());
-        assertThat(detail(layout, "Size:9.5 inch").yMm().subtract(weight.yMm()))
-                .isEqualByComparingTo(weight.yMm().subtract(name.yMm()));
+    }
+
+    @Test
+    @DisplayName("a name too long even for that is wrapped, whole, inside the tag")
+    void aVeryLongNameIsWrapped() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+        settings.setMarginLeftMm(new BigDecimal("-20.00"));
+        BigDecimal tagRight = settings.getMarginLeftMm().add(settings.getLabelWidthMm());
+
+        String name = "Silver Oxidised Antique Temple Thandai Anklet Pair";
+        LabelLayout layout = layoutOf(named(name), settings);
+        List<LabelLayout.Text> lines = nameLines(layout);
+
+        assertThat(lines.size()).isGreaterThan(1);
+        // Every word survives, in order, and every line is on the tag.
+        assertThat(String.join(" ", lines.stream().map(LabelLayout.Text::value).toList()))
+                .isEqualToIgnoringCase(name);
+        for (LabelLayout.Text line : lines) {
+            assertThat(line.xMm().add(LabelLayout.textWidthMm(line.value(), line.fontPt())))
+                    .as(line.value())
+                    .isLessThanOrEqualTo(tagRight);
+        }
+        // The weight follows the last of them rather than sitting on top of it.
+        assertThat(detail(layout, "GMS.43.550").yMm()).isGreaterThan(lines.get(lines.size() - 1).yMm());
+        assertThat(layout.bottomMm()).isLessThanOrEqualTo(settings.getLabelHeightMm());
+    }
+
+    @Test
+    @DisplayName("the lines of a wrapped name are evenly set, like the ones under it")
+    void wrappedLinesKeepTheRhythm() {
+        LabelSettings settings = tagSettings();
+        settings.setShowPurity(false);
+        settings.setMarginLeftMm(new BigDecimal("-20.00"));
+
+        LabelLayout layout = layoutOf(named("Silver Oxidised Antique Temple Thandai Anklet Pair"), settings);
+        List<LabelLayout.Text> lines = nameLines(layout);
+
+        BigDecimal step = lines.get(1).yMm().subtract(lines.get(0).yMm());
+        assertThat(step).isEqualByComparingTo(LabelLayout.lineHeightMm(settings.getDetailFontPt()));
+        assertThat(detail(layout, "GMS.43.550").yMm().subtract(lines.get(lines.size() - 1).yMm()))
+                .isEqualByComparingTo(step);
     }
 
     @Test

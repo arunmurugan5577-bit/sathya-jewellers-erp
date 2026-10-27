@@ -102,6 +102,21 @@ public record LabelLayout(
      */
     private static final BigDecimal MIN_NAME_FONT_PT = new BigDecimal("3.0");
 
+    /**
+     * How much smaller the name may be set to keep it on one line.
+     *
+     * <p>A shade, not a squeeze. Past this the line is better wrapped than
+     * shrunk - and a name set at half the weight below it looks like a
+     * mistake rather than a decision.
+     */
+    private static final BigDecimal SLIGHT_SHRINK = new BigDecimal("0.80");
+
+    /** The step the name's type is tried in when a wrap has to be sized. */
+    private static final BigDecimal FONT_STEP_PT = new BigDecimal("0.1");
+
+    /** A name is a name, not a paragraph; past this the tag is the wrong size. */
+    private static final int MAX_NAME_LINES = 3;
+
     /** Between the serial number and the purity. */
     private static final BigDecimal IDENT_GAP_MM = new BigDecimal("1");
     /** Under the bars, before the serial number. */
@@ -172,8 +187,65 @@ public record LabelLayout(
         BigDecimal codeW = hasSideMark ? sideStripW.add(barsColumnW) : barsColumnW;
         BigDecimal codeH = barcodeH.add(IDENT_TOP_MM).add(identH);
 
+        BigDecimal originX = settings.getMarginLeftMm();
+
+        // Where the detail column starts, and it is the same on every tag.
+        //
+        // A barcode's width follows what the serial encodes to, not how long it
+        // looks: 151 is three digits and takes 68 modules, because an odd digit
+        // count forces a code switch, where the four digits of 3130 take 57.
+        // Letting the text follow the bars put the two tags' descriptions 2.75
+        // mm apart in a tray that should read as one column, so the gap after
+        // the bars takes up the slack instead and the text stays put.
+        //
+        // The column also never begins before the middle of the tag. That is
+        // the shop's rule and it is a sound one: the left half is the barcode's
+        // and the right half is the description's, so a scanner's aim and a
+        // jeweller's eye each have a side of the tag to themselves.
+        BigDecimal tagLeft = tagLeftMm(settings);
+        BigDecimal tagRight = tagLeft.add(settings.getLabelWidthMm());
+        BigDecimal detailMinX = tagLeft.add(settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP));
+        BigDecimal detailColumnX = originX.add(codeW).add(BLOCK_GAP_MM).max(detailMinX);
+        BigDecimal detailRoomW = tagRight.subtract(detailColumnX).max(BigDecimal.ZERO);
+
         BigDecimal detailLineH = lineHeightMm(settings.getDetailFontPt());
-        BigDecimal linesH = detailLineH.multiply(BigDecimal.valueOf(details.size()));
+
+        // The description gets the rest of the tag, and is made to stay on it.
+        //
+        // The weight and the size are of a known length. The name is whatever
+        // the piece is called - it is the sub category's name - and a long one
+        // ran off the end of the tag and printed onto the backing. So it is
+        // set a little smaller to keep it on one line, and if that is not
+        // enough it is wrapped onto the next. Wrapping at the size asked for
+        // beats squeezing it onto one line at half of it: two readable lines
+        // are worth more to a jeweller than one unreadable one.
+        //
+        // How many lines the name may have is whatever the column has spare
+        // after the weight and the size. The shop's mark is not counted
+        // against it: a mark is the least of what a tag carries, so where the
+        // two cannot both be had the mark gives way - which the shop line's
+        // own test below already does, once it sees how tall the name came
+        // out. Counting it here instead cost a long name its last words.
+        int roomLines = contentH.divide(detailLineH, 0, RoundingMode.DOWN).intValue();
+        int otherLines = Math.max(0, details.size() - 1);
+        int maxNameLines = Math.min(MAX_NAME_LINES, Math.max(1, roomLines - otherLines));
+        FittedName fittedName = fitName(
+                details.isEmpty() ? "" : details.get(0), settings.getDetailFontPt(), detailRoomW, maxNameLines);
+
+        List<DetailLine> detailLines = new ArrayList<>();
+        if (!details.isEmpty()) {
+            // The description stays the bold one: it is what a jeweller reads
+            // first, and the short name above it is the same on every tag in
+            // the tray. Every line of a wrapped name is part of that name.
+            for (String line : fittedName.lines()) {
+                detailLines.add(new DetailLine(line, fittedName.fontPt(), true, Role.NAME));
+            }
+            for (String line : details.subList(1, details.size())) {
+                detailLines.add(new DetailLine(line, settings.getDetailFontPt(), false, Role.DETAIL));
+            }
+        }
+
+        BigDecimal linesH = detailLineH.multiply(BigDecimal.valueOf(detailLines.size()));
         // The logo is the last thing in the detail column, under the size line.
         BigDecimal logoExtra = useLogo
                 ? (details.isEmpty() ? BigDecimal.ZERO : LOGO_TOP_MM).add(logoSize)
@@ -198,42 +270,9 @@ public record LabelLayout(
         BigDecimal detailH = detailTextH.add(logoExtra);
         boolean hasDetailBlock = hasShopLine || !details.isEmpty() || useLogo;
 
-        BigDecimal originX = settings.getMarginLeftMm();
-
-        // Where the detail column starts, and it is the same on every tag.
-        //
-        // A barcode's width follows what the serial encodes to, not how long it
-        // looks: 151 is three digits and takes 68 modules, because an odd digit
-        // count forces a code switch, where the four digits of 3130 take 57.
-        // Letting the text follow the bars put the two tags' descriptions 2.75
-        // mm apart in a tray that should read as one column, so the gap after
-        // the bars takes up the slack instead and the text stays put.
-        //
-        // The column also never begins before the middle of the tag. That is
-        // the shop's rule and it is a sound one: the left half is the barcode's
-        // and the right half is the description's, so a scanner's aim and a
-        // jeweller's eye each have a side of the tag to themselves.
-        BigDecimal tagLeft = tagLeftMm(settings);
-        BigDecimal tagRight = tagLeft.add(settings.getLabelWidthMm());
-        BigDecimal detailMinX = tagLeft.add(settings.getLabelWidthMm().divide(TWO, 3, RoundingMode.HALF_UP));
-        BigDecimal detailColumnX = originX.add(codeW).add(BLOCK_GAP_MM).max(detailMinX);
-
-        // The description gets the rest of the tag, and is set to fit it.
-        //
-        // The weight and the size are of a known length; the name is whatever
-        // the piece is called, and "9.5\" M.THIRUKAI" ran off the end of the
-        // tag and onto the backing. It is set smaller until it fits instead,
-        // which keeps the whole name on a tag that has no second line to give
-        // it. Only the type shrinks - the line spacing does not - so the three
-        // lines stay evenly set however long the name is.
-        BigDecimal detailRoomW = tagRight.subtract(detailColumnX).max(BigDecimal.ZERO);
-        String name = details.isEmpty() ? "" : details.get(0);
-        BigDecimal nameFontPt = fittedFontPt(name, settings.getDetailFontPt(), detailRoomW);
-
-        BigDecimal detailW = details.stream()
-                .skip(1)
-                .map(line -> textWidthMm(line, settings.getDetailFontPt()))
-                .reduce(textWidthMm(name, nameFontPt), BigDecimal::max)
+        BigDecimal detailW = detailLines.stream()
+                .map(line -> textWidthMm(line.text(), line.fontPt()))
+                .reduce(BigDecimal.ZERO, BigDecimal::max)
                 .max(hasShopLine ? textWidthMm(shop, settings.getDetailFontPt()) : BigDecimal.ZERO)
                 .max(logoSize);
 
@@ -290,14 +329,11 @@ public record LabelLayout(
                 elements.add(new Text(shop, detailX, lineY, settings.getDetailFontPt(), true, Role.SHOP));
                 lineY = lineY.add(shopLineH);
             }
-            for (int line = 0; line < details.size(); line++) {
-                // The description stays the bold one: it is what a jeweller
-                // reads first, and the short name above it is the same on every
-                // tag in the tray.
-                elements.add(new Text(details.get(line), detailX,
+            for (int line = 0; line < detailLines.size(); line++) {
+                DetailLine detail = detailLines.get(line);
+                elements.add(new Text(detail.text(), detailX,
                         lineY.add(detailLineH.multiply(BigDecimal.valueOf(line))),
-                        line == 0 ? nameFontPt : settings.getDetailFontPt(),
-                        line == 0, line == 0 ? Role.NAME : Role.DETAIL));
+                        detail.fontPt(), detail.bold(), detail.role()));
             }
             if (useLogo) {
                 BigDecimal logoY = detailY.add(detailTextH)
@@ -365,21 +401,80 @@ public record LabelLayout(
                 .subtract(INNER_GAP_MM);
     }
 
+    /** One line of the detail column, with the type it is set in. */
+    private record DetailLine(String text, BigDecimal fontPt, boolean bold, Role role) {}
+
+    /** A name made to fit: the lines to print, and the type to print them in. */
+    private record FittedName(List<String> lines, BigDecimal fontPt) {}
+
     /**
-     * The largest type the text will fit in, up to the size asked for.
+     * Fits the name to the column: a little smaller first, then wrapped.
      *
-     * <p>Width scales with the point size, so the size that fits is the one
-     * asked for scaled by how much too wide the text is. Floored, because past
-     * a point a thermal head prints a grey bar rather than letters.
+     * <p>In that order because one line reads better than two. A name only a
+     * shade too long is set a shade smaller and stays on its line; one that is
+     * properly too long is wrapped at the size asked for, since two readable
+     * lines beat one squeezed one.
      */
-    private static BigDecimal fittedFontPt(String text, BigDecimal fontPt, BigDecimal roomMm) {
-        BigDecimal width = textWidthMm(text, fontPt);
-        if (text.isEmpty() || roomMm.signum() <= 0 || width.compareTo(roomMm) <= 0) {
-            return fontPt;
+    private static FittedName fitName(String name, BigDecimal fontPt, BigDecimal roomMm, int maxLines) {
+        if (name.isEmpty() || roomMm.signum() <= 0 || textWidthMm(name, fontPt).compareTo(roomMm) <= 0) {
+            return new FittedName(List.of(name), fontPt);
         }
-        return fontPt.multiply(roomMm)
-                .divide(width, 2, RoundingMode.DOWN)
-                .max(MIN_NAME_FONT_PT);
+        BigDecimal slight = fontPt.multiply(SLIGHT_SHRINK).setScale(2, RoundingMode.DOWN).max(MIN_NAME_FONT_PT);
+        if (textWidthMm(name, slight).compareTo(roomMm) <= 0) {
+            return new FittedName(List.of(name), slight);
+        }
+        for (BigDecimal size = fontPt; size.compareTo(MIN_NAME_FONT_PT) >= 0; size = size.subtract(FONT_STEP_PT)) {
+            List<String> lines = wrap(name, size, roomMm);
+            if (lines.size() <= maxLines) {
+                return new FittedName(lines, size);
+            }
+        }
+        // Out of room and out of sizes. Two lines at the smallest type hold
+        // around a hundred characters between them, so nothing the shop calls
+        // a sub category reaches here; if one ever does, the tag keeps what
+        // fits rather than printing the rest onto the backing.
+        List<String> lines = wrap(name, MIN_NAME_FONT_PT, roomMm);
+        return new FittedName(lines.subList(0, Math.min(lines.size(), maxLines)), MIN_NAME_FONT_PT);
+    }
+
+    /**
+     * Breaks text at the spaces to fit a width.
+     *
+     * <p>A single word wider than the column is broken mid-word. It reads
+     * badly, but a word that cannot be broken cannot be kept on the tag, and
+     * staying on the tag is the point.
+     */
+    private static List<String> wrap(String text, BigDecimal fontPt, BigDecimal roomMm) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : text.trim().split("\\s+")) {
+            while (textWidthMm(word, fontPt).compareTo(roomMm) > 0 && word.length() > 1) {
+                int fits = Math.max(1, roomMm.divide(
+                        textWidthMm("x", fontPt), 0, RoundingMode.DOWN).intValue());
+                if (fits >= word.length()) {
+                    break;
+                }
+                if (!line.isEmpty()) {
+                    lines.add(line.toString());
+                    line.setLength(0);
+                }
+                lines.add(word.substring(0, fits));
+                word = word.substring(fits);
+            }
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (line.isEmpty() || textWidthMm(candidate, fontPt).compareTo(roomMm) <= 0) {
+                line.setLength(0);
+                line.append(candidate);
+            } else {
+                lines.add(line.toString());
+                line.setLength(0);
+                line.append(word);
+            }
+        }
+        if (!line.isEmpty()) {
+            lines.add(line.toString());
+        }
+        return lines.isEmpty() ? List.of(text) : lines;
     }
 
     /**
