@@ -12,6 +12,7 @@ import { Lookup } from '../../shared/models/lookup.model';
 import { ReportColumn, ReportPreview } from '../../shared/models/sales.model';
 import { InrPipe } from '../../shared/pipes/inr.pipe';
 import { CategoryService } from '../masters/category/category.service';
+import { SubCategoryService } from '../masters/sub-category/sub-category.service';
 import { ItemTypeService } from '../masters/item-type/item-type.service';
 import { ReportApiService, ReportKind } from '../sales/sales-api.service';
 
@@ -94,9 +95,19 @@ function isoDate(date: Date): string {
             </div>
             <div class="toolbar__field">
               <label class="toolbar__label" for="category">Category</label>
-              <select id="category" class="select" (change)="categoryId.set($any($event.target).value)">
+              <select id="category" class="select" (change)="onCategoryChange($any($event.target).value)">
                 <option value="">All</option>
                 @for (category of categories(); track category.id) { <option [value]="category.id">{{ category.name }}</option> }
+              </select>
+            </div>
+            <div class="toolbar__field">
+              <label class="toolbar__label" for="subCategory">Sub category</label>
+              <select id="subCategory" class="select" [disabled]="!categoryId()"
+                      (change)="subCategoryId.set($any($event.target).value)">
+                <option value="">{{ categoryId() ? 'All' : 'Choose a category' }}</option>
+                @for (sub of subCategories(); track sub.id) {
+                  <option [value]="sub.id" [selected]="subCategoryId() === String(sub.id)">{{ sub.name }}</option>
+                }
               </select>
             </div>
             <div class="toolbar__field">
@@ -201,9 +212,14 @@ export class ReportsComponent {
   protected readonly paymentStatus = signal('');
   protected readonly itemTypeId = signal('');
   protected readonly categoryId = signal('');
+  protected readonly subCategoryId = signal('');
   protected readonly stockStatus = signal('');
   protected readonly itemTypes = signal<Lookup[]>([]);
   protected readonly categories = signal<Lookup[]>([]);
+  protected readonly subCategories = signal<Lookup[]>([]);
+  private readonly subCategoryService = inject(SubCategoryService);
+  /** Templates cannot call the global; the select compares ids as strings. */
+  protected readonly String = String;
 
   protected readonly result = signal<ReportPreview | null>(null);
   protected readonly loading = signal(false);
@@ -330,6 +346,20 @@ export class ReportsComponent {
     return true;
   }
 
+  /**
+   * A new category means different sub categories, and the one chosen under
+   * the old category is no longer a filter anybody meant.
+   */
+  protected onCategoryChange(value: string): void {
+    this.categoryId.set(value);
+    this.subCategoryId.set('');
+    this.subCategories.set([]);
+    if (value) {
+      this.subCategoryService.lookupByCategory(Number(value))
+          .subscribe((values) => this.subCategories.set(values));
+    }
+  }
+
   private params(): Record<string, string> {
     const base = { startDate: this.startDate(), endDate: this.endDate() };
     switch (this.kind()) {
@@ -338,7 +368,13 @@ export class ReportsComponent {
       case 'wholesale':
         return { ...base, status: this.wholesaleStatus() };
       default:
-        return { ...base, itemTypeId: this.itemTypeId(), categoryId: this.categoryId(), status: this.stockStatus() };
+        return {
+          ...base,
+          itemTypeId: this.itemTypeId(),
+          categoryId: this.categoryId(),
+          subCategoryId: this.subCategoryId(),
+          status: this.stockStatus(),
+        };
     }
   }
 }

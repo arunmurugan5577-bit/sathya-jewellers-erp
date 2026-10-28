@@ -1,7 +1,10 @@
 package com.jewellery.erp.dashboard.controller;
 
 import com.jewellery.erp.dashboard.dto.DashboardSummaryDto;
+import com.jewellery.erp.dashboard.dto.StockByCategoryDto;
 import com.jewellery.erp.dashboard.service.DashboardService;
+import com.jewellery.erp.permission.PermissionCatalog;
+import java.util.List;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +30,16 @@ public class DashboardController {
 
     public DashboardController(DashboardService dashboardService) {
         this.dashboardService = dashboardService;
+    }
+
+    @GetMapping("/stock-by-category")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.INVENTORY_VIEW + "')")
+    @Operation(
+            summary = "Stock on the shelf, by category and sub category",
+            description = "Active, unsold pieces, weighed by what is left of them - the same stock the "
+                    + "summary counts. Requires INVENTORY_VIEW.")
+    public ResponseEntity<List<StockByCategoryDto>> stockByCategory() {
+        return ResponseEntity.ok(dashboardService.stockByCategory());
     }
 
     @GetMapping("/summary")

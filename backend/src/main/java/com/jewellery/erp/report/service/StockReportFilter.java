@@ -9,5 +9,6 @@ public record StockReportFilter(
         LocalDate endDate,
         Long itemTypeId,
         Long categoryId,
+        Long subCategoryId,
         InventoryStatus status,
         boolean includeInactive) {}

@@ -54,10 +54,12 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) Long itemTypeId,
             @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) InventoryStatus status,
             @RequestParam(defaultValue = "false") boolean includeInactive) {
         return ResponseEntity.ok(reportService.previewStock(
-                new StockReportFilter(startDate, endDate, itemTypeId, categoryId, status, includeInactive)));
+                new StockReportFilter(
+                        startDate, endDate, itemTypeId, categoryId, subCategoryId, status, includeInactive)));
     }
 
     @GetMapping("/stock/export")
@@ -68,10 +70,12 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) Long itemTypeId,
             @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) InventoryStatus status,
             @RequestParam(defaultValue = "false") boolean includeInactive) throws IOException {
         return download(reportService.exportStock(
-                new StockReportFilter(startDate, endDate, itemTypeId, categoryId, status, includeInactive)));
+                new StockReportFilter(
+                        startDate, endDate, itemTypeId, categoryId, subCategoryId, status, includeInactive)));
     }
 
     @GetMapping("/sales/preview")

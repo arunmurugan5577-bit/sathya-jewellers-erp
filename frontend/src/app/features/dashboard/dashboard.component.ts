@@ -7,7 +7,7 @@ import { Permissions } from '../../core/auth/permissions';
 import { ApiService } from '../../core/services/api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { SpinnerComponent } from '../../shared/components/spinner.component';
-import { DashboardSummary } from '../../shared/models/shop.model';
+import { DashboardSummary, StockByCategory } from '../../shared/models/shop.model';
 // Used to format the stock-weight metric in TypeScript, not in the template.
 import { WeightPipe } from '../../shared/pipes/weight.pipe';
 
@@ -43,7 +43,7 @@ const tileIcons = {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [NgTemplateOutlet, RouterLink, PageHeaderComponent, SpinnerComponent],
+  imports: [NgTemplateOutlet, RouterLink, PageHeaderComponent, SpinnerComponent, WeightPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="stack">
@@ -93,6 +93,52 @@ const tileIcons = {
           </div>
         }
 
+        @if (canSeeStock()) {
+          <section class="card">
+            <div class="card__header">
+              <h2 class="card__title">Stock by category</h2>
+              <button type="button" class="btn btn--sm" (click)="toggleStock()">
+                {{ stockOpen() ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            @if (stockOpen()) {
+              @if (stockLoading()) {
+                <app-spinner label="Counting the shelves..." />
+              } @else if (!stock().length) {
+                <p class="card__body text-muted">Nothing in stock to count.</p>
+              } @else {
+                <div class="table-wrap">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Category</th>
+                        <th class="num">Items</th>
+                        <th class="num">Weight</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (group of stock(); track group.categoryId) {
+                        <tr class="row--category">
+                          <td>{{ group.categoryName }}</td>
+                          <td class="num">{{ group.items }}</td>
+                          <td class="num">{{ group.weightGrams | weight }}</td>
+                        </tr>
+                        @for (sub of group.subCategories; track sub.subCategoryId ?? 0) {
+                          <tr class="row--sub">
+                            <td>{{ sub.subCategoryName }}</td>
+                            <td class="num">{{ sub.items }}</td>
+                            <td class="num">{{ sub.weightGrams | weight }}</td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            }
+          </section>
+        }
+
         @if (quickActions().length > 0) {
           <section class="card">
             <div class="card__header">
@@ -112,6 +158,13 @@ const tileIcons = {
   `,
   styles: [
     `
+      .num { text-align: right; font-variant-numeric: tabular-nums; }
+      .table-wrap { overflow-x: auto; }
+      .row--category td { font-weight: 600; }
+      /* Indented, so a sub category reads as belonging to the line above it. */
+      .row--sub td:first-child { padding-left: var(--space-6); color: var(--text-secondary); }
+      .row--sub td { border-top: 0; }
+
       .metrics {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -238,6 +291,38 @@ export class DashboardComponent {
     }
     return actions;
   });
+
+  protected readonly stock = signal<StockByCategory[]>([]);
+  protected readonly stockOpen = signal(false);
+  protected readonly stockLoading = signal(false);
+  private stockLoaded = false;
+
+  protected readonly canSeeStock = computed(() => {
+    this.auth.permissions();
+    return this.auth.has(Permissions.INVENTORY_VIEW);
+  });
+
+  /**
+   * Fetched when it is first opened, not with the summary.
+   *
+   * <p>It is a table rather than a number, and most visits to the landing page
+   * are on the way somewhere else. Asked for once and kept.
+   */
+  protected toggleStock(): void {
+    this.stockOpen.update((open) => !open);
+    if (!this.stockOpen() || this.stockLoaded) {
+      return;
+    }
+    this.stockLoaded = true;
+    this.stockLoading.set(true);
+    this.api.get<StockByCategory[]>('/dashboard/stock-by-category').subscribe({
+      next: (rows) => {
+        this.stock.set(rows);
+        this.stockLoading.set(false);
+      },
+      error: () => this.stockLoading.set(false),
+    });
+  }
 
   constructor() {
     this.api.get<DashboardSummary>('/dashboard/summary').subscribe({

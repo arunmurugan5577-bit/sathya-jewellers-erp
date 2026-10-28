@@ -107,6 +107,9 @@ public class ReportService {
         if (filter.categoryId() != null) {
             labels.put("category", name("categories", "name", filter.categoryId()));
         }
+        if (filter.subCategoryId() != null) {
+            labels.put("subCategory", name("sub_categories", "name", filter.subCategoryId()));
+        }
         return definitions.stock(filter, labels);
     }
 

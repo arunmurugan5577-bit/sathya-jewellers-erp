@@ -13,6 +13,7 @@ import com.jewellery.erp.common.exception.ErrorCode;
 import com.jewellery.erp.common.exception.ReferencedRecordException;
 import com.jewellery.erp.common.exception.StateConflictException;
 import com.jewellery.erp.common.exception.ResourceNotFoundException;
+import com.jewellery.erp.common.util.Money;
 import com.jewellery.erp.common.util.StringNormalizer;
 import com.jewellery.erp.hsn.service.HsnCodeService;
 import com.jewellery.erp.inventory.dto.InventoryItemDto;
@@ -21,13 +22,16 @@ import com.jewellery.erp.inventory.dto.InventoryItemRequest;
 import com.jewellery.erp.inventory.entity.InventoryItem;
 import com.jewellery.erp.inventory.entity.InventoryStatus;
 import com.jewellery.erp.inventory.mapper.InventoryItemMapper;
+import com.jewellery.erp.dashboard.dto.StockByCategoryDto;
 import com.jewellery.erp.inventory.repository.InventoryItemRepository;
+import com.jewellery.erp.inventory.repository.StockGroupRow;
 import com.jewellery.erp.inventory.spec.InventoryItemSpecifications;
 import com.jewellery.erp.itemtype.entity.ItemType;
 import com.jewellery.erp.itemtype.service.ItemTypeService;
 import com.jewellery.erp.purity.service.PurityService;
 import com.jewellery.erp.subcategory.service.SubCategoryService;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -186,6 +190,35 @@ public class InventoryItemService {
                 inventoryItemRepository.countByActiveTrueAndStatus(InventoryStatus.AVAILABLE),
                 // Null when the shop holds no active stock at all.
                 activeWeight == null ? BigDecimal.ZERO : activeWeight);
+    }
+
+    /**
+     * What is on the shelf, by category and the sub categories under it.
+     *
+     * <p>The repository groups it; this only folds the rows into one entry per
+     * category and gives the pieces filed under no sub category a name to show.
+     */
+    public List<StockByCategoryDto> stockByCategory() {
+        Map<Long, List<StockGroupRow>> byCategory = inventoryItemRepository.stockByCategory().stream()
+                .collect(Collectors.groupingBy(StockGroupRow::categoryId, LinkedHashMap::new, Collectors.toList()));
+
+        List<StockByCategoryDto> categories = new ArrayList<>(byCategory.size());
+        for (List<StockGroupRow> rows : byCategory.values()) {
+            long items = rows.stream().mapToLong(StockGroupRow::items).sum();
+            BigDecimal weight = rows.stream()
+                    .map(StockGroupRow::weightGrams)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<StockByCategoryDto.SubCategoryStock> subs = rows.stream()
+                    .map(row -> new StockByCategoryDto.SubCategoryStock(
+                            row.subCategoryId(),
+                            row.subCategoryName() == null ? "Unspecified" : row.subCategoryName(),
+                            row.items(),
+                            Money.weight(row.weightGrams())))
+                    .toList();
+            categories.add(new StockByCategoryDto(
+                    rows.get(0).categoryId(), rows.get(0).categoryName(), items, Money.weight(weight), subs));
+        }
+        return categories;
     }
 
     // ------------------------------------------------------------ commands ---

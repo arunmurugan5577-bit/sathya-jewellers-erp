@@ -176,6 +176,11 @@ public class ReportDefinitions {
             params.put("categoryId", filter.categoryId());
             descriptions.add("Category: " + labels.get("category"));
         }
+        if (filter.subCategoryId() != null) {
+            sql.append(" AND i.sub_category_id = :subCategoryId");
+            params.put("subCategoryId", filter.subCategoryId());
+            descriptions.add("Sub category: " + labels.get("subCategory"));
+        }
         if (filter.status() != null) {
             sql.append(" AND i.status = :status");
             params.put("status", filter.status().name());

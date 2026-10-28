@@ -2,6 +2,8 @@ package com.jewellery.erp.dashboard.service;
 
 import com.jewellery.erp.category.service.CategoryService;
 import com.jewellery.erp.dashboard.dto.DashboardSummaryDto;
+import com.jewellery.erp.dashboard.dto.StockByCategoryDto;
+import java.util.List;
 import com.jewellery.erp.inventory.service.InventoryItemService;
 import com.jewellery.erp.permission.PermissionCatalog;
 import com.jewellery.erp.security.SecurityUtils;
@@ -36,6 +38,17 @@ public class DashboardService {
         this.inventoryItemService = inventoryItemService;
         this.categoryService = categoryService;
         this.userRepository = userRepository;
+    }
+
+    /**
+     * The stock breakdown behind the dashboard's own stock card.
+     *
+     * <p>Its own call rather than another field on the summary: it is a table
+     * rather than a number, the landing page should not pay for it before
+     * anyone asks, and the summary stays the cheap thing it is.
+     */
+    public List<StockByCategoryDto> stockByCategory() {
+        return inventoryItemService.stockByCategory();
     }
 
     public DashboardSummaryDto summarise() {

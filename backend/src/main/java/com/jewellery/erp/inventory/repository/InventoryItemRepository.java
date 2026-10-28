@@ -89,4 +89,29 @@ public interface InventoryItemRepository
      */
     @Query("select sum(i.remainingWeightGrams) from InventoryItem i where i.active = true and i.status = com.jewellery.erp.inventory.entity.InventoryStatus.AVAILABLE")
     BigDecimal sumRemainingWeightGrams();
+
+    /**
+     * What is on the shelf, grouped by category and sub category.
+     *
+     * <p>"On the shelf" is the same stock the dashboard's own card counts:
+     * active and unsold, weighed by what is left, so a bulk box half sold
+     * brings only its remaining half. A piece filed under no sub category
+     * comes back with a null one rather than being dropped from its
+     * category's total.
+     *
+     * <p>One query for the whole breakdown. Walking the categories and asking
+     * per sub category would be a hundred round trips on this shop's masters.
+     */
+    @Query("""
+            select new com.jewellery.erp.inventory.repository.StockGroupRow(
+                       c.id, c.name, sc.id, sc.name, count(i), coalesce(sum(i.remainingWeightGrams), 0))
+              from InventoryItem i
+              join i.category c
+              left join i.subCategory sc
+             where i.active = true
+               and i.status = com.jewellery.erp.inventory.entity.InventoryStatus.AVAILABLE
+             group by c.id, c.name, sc.id, sc.name
+             order by c.name asc, sc.name asc
+            """)
+    List<StockGroupRow> stockByCategory();
 }
