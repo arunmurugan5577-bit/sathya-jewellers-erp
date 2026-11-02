@@ -156,7 +156,7 @@ public class SaleService {
         if (!request.chitsOrEmpty().isEmpty()) {
             if (request.customerId() == null) {
                 throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "customerId",
-                        "Choose the customer before applying a chit.");
+                        "Choose the customer before applying a savings scheme.");
             }
             chits = chitRedemptionService.price(chitSpends(request),
                     chitRedemptionService.findRedeemable(chitIds(request)), request.customerId());
@@ -376,7 +376,7 @@ public class SaleService {
         sale.setCancelledAt(Instant.now());
         repository.flush();
         log.info("Sale {} cancelled: {} piece(s) returned to stock{}", sale.getInvoiceNumber(), returning.size(),
-                chitReleased.signum() == 0 ? "" : ", " + chitReleased + " put back on chits");
+                chitReleased.signum() == 0 ? "" : ", " + chitReleased + " put back on savings schemes");
         return mapper.toDetail(requireDetailed(id));
     }
 

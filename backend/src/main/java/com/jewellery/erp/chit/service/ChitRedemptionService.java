@@ -95,11 +95,11 @@ public class ChitRedemptionService {
         for (Long id : ids) {
             ChitAccount account = byId.get(id);
             if (account == null) {
-                throw ResourceNotFoundException.of("Chit", id);
+                throw ResourceNotFoundException.of("Savings scheme", id);
             }
             if (!account.isRedeemable()) {
                 throw new StateConflictException(ErrorCode.CHIT_NOT_REDEEMABLE, "chitRedemptions",
-                        "Chit %s cannot be spent: it %s.".formatted(account.getChitNumber(), why(account)));
+                        "Savings scheme %s cannot be spent: it %s.".formatted(account.getChitNumber(), why(account)));
             }
         }
         return byId;
@@ -130,17 +130,17 @@ public class ChitRedemptionService {
         for (SpendRequest request : requests) {
             ChitAccount account = chits.get(request.chitAccountId());
             if (account == null) {
-                throw ResourceNotFoundException.of("Chit", request.chitAccountId());
+                throw ResourceNotFoundException.of("Savings scheme", request.chitAccountId());
             }
             if (seen.contains(account.getId())) {
                 throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "chitRedemptions",
-                        "Chit %s is on this invoice more than once.".formatted(account.getChitNumber()));
+                        "Savings scheme %s is on this invoice more than once.".formatted(account.getChitNumber()));
             }
             seen.add(account.getId());
 
             if (customerId != null && !account.getCustomer().getId().equals(customerId)) {
                 throw new BusinessRuleException(ErrorCode.CHIT_CUSTOMER_MISMATCH, "chitRedemptions",
-                        "Chit %s belongs to %s and cannot be spent by another customer."
+                        "Savings scheme %s belongs to %s and cannot be spent by another customer."
                                 .formatted(account.getChitNumber(), account.getCustomer().getFullName()));
             }
             spends.add(account.isGold() ? gold(account, request) : money(account, request));
@@ -151,18 +151,18 @@ public class ChitRedemptionService {
     private Spend gold(ChitAccount account, SpendRequest request) {
         if (request.grams() == null || request.ratePerGram() == null) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "chitRedemptions",
-                    ("Chit %s holds gold. Say how many grams to take and today's rate; "
+                    ("Savings scheme %s holds gold. Say how many grams to take and today's rate; "
                             + "the value follows from those.").formatted(account.getChitNumber()));
         }
         if (request.amount() != null) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "chitRedemptions",
-                    "Chit %s holds gold, so its value is worked out from the grams and the rate."
+                    "Savings scheme %s holds gold, so its value is worked out from the grams and the rate."
                             .formatted(account.getChitNumber()));
         }
         BigDecimal grams = Money.weight(request.grams());
         if (grams.compareTo(account.getBalanceGrams()) > 0) {
             throw new StateConflictException(ErrorCode.CHIT_BALANCE_EXCEEDED, "chitRedemptions",
-                    "Chit %s holds %s g; %s g was asked of it."
+                    "Savings scheme %s holds %s g; %s g was asked of it."
                             .formatted(account.getChitNumber(), account.getBalanceGrams(), grams));
         }
         BigDecimal rate = Money.money(request.ratePerGram());
@@ -172,18 +172,18 @@ public class ChitRedemptionService {
     private Spend money(ChitAccount account, SpendRequest request) {
         if (request.grams() != null || request.ratePerGram() != null) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "chitRedemptions",
-                    "Chit %s holds money, not gold. It takes neither grams nor a rate."
+                    "Savings scheme %s holds money, not gold. It takes neither grams nor a rate."
                             .formatted(account.getChitNumber()));
         }
         if (request.amount() == null) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "chitRedemptions",
-                    "Say how much of chit %s to put against this invoice."
+                    "Say how much of savings scheme %s to put against this invoice."
                             .formatted(account.getChitNumber()));
         }
         BigDecimal amount = Money.money(request.amount());
         if (amount.compareTo(account.getBalanceAmount()) > 0) {
             throw new StateConflictException(ErrorCode.CHIT_BALANCE_EXCEEDED, "chitRedemptions",
-                    "Chit %s has %s left; %s was asked of it."
+                    "Savings scheme %s has %s left; %s was asked of it."
                             .formatted(account.getChitNumber(), account.getBalanceAmount(), amount));
         }
         return new Spend(account, null, null, amount);
@@ -220,7 +220,7 @@ public class ChitRedemptionService {
             // an empty collection in memory and Hibernate never reads the rows
             // it does not own.
             sale.getChitRedemptions().add(redemption);
-            log.info("Chit {} spent on invoice {}: {}{}", spend.account().getChitNumber(),
+            log.info("Savings scheme {} spent on invoice {}: {}{}", spend.account().getChitNumber(),
                     sale.getInvoiceNumber(), spend.amount(),
                     spend.grams() == null ? "" : " for " + spend.grams() + " g");
         }
@@ -245,10 +245,10 @@ public class ChitRedemptionService {
         BigDecimal released = Money.ZERO;
         for (ChitRedemption redemption : redemptions) {
             ChitAccount account = accountRepository.lockById(redemption.getChitAccount().getId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Chit", redemption.getChitAccount().getId()));
+                    .orElseThrow(() -> ResourceNotFoundException.of("Savings scheme", redemption.getChitAccount().getId()));
             account.returnRedemption(redemption);
             released = released.add(redemption.getAmount());
-            log.info("Chit {}: {} put back from invoice {}", account.getChitNumber(),
+            log.info("Savings scheme {}: {} put back from invoice {}", account.getChitNumber(),
                     redemption.getAmount(), saleId);
         }
         if (!redemptions.isEmpty()) {

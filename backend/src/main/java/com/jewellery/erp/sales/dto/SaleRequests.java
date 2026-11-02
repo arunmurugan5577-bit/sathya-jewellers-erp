@@ -82,17 +82,17 @@ public final class SaleRequests {
     public record ChitRedemption(
             @NotNull(message = "Chit is required") Long chitAccountId,
 
-            @Schema(example = "24000.00", description = "Money chits only")
+            @Schema(example = "24000.00", description = "Money schemes only")
             @DecimalMin(value = "0.01", message = "The amount must be greater than zero")
             @Digits(integer = 12, fraction = 2, message = "Amount allows up to 2 decimal places")
             BigDecimal amount,
 
-            @Schema(example = "2.632", description = "Gold chits only: the grams to take off the chit")
+            @Schema(example = "2.632", description = "Gold schemes only: the grams to take off the scheme")
             @DecimalMin(value = "0.001", message = "The weight must be greater than zero")
             @Digits(integer = 9, fraction = 3, message = "Weight allows at most 3 decimal places")
             BigDecimal grams,
 
-            @Schema(example = "14800.00", description = "Gold chits only: today's rate")
+            @Schema(example = "14800.00", description = "Gold schemes only: today's rate")
             @DecimalMin(value = "0.01", message = "The rate must be greater than zero")
             @Digits(integer = 10, fraction = 2, message = "Rate allows up to 2 decimal places")
             BigDecimal ratePerGram) {}
@@ -132,7 +132,7 @@ public final class SaleRequests {
             @Size(max = 10, message = "At most 10 old gold / silver bills per invoice")
             List<@Valid @NotNull OldMetalAdjustment> oldMetalAdjustments,
 
-            @Size(max = 5, message = "At most 5 chits per invoice")
+            @Size(max = 5, message = "At most 5 savings schemes per invoice")
             List<@Valid @NotNull ChitRedemption> chitRedemptions,
 
             @Size(max = 10, message = "At most 10 payments per invoice")

@@ -100,7 +100,7 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
           @for (chit of activeChits(); track chit.id) {
             <tr>
               <td colspan="8" class="right">
-                Less: Chit ({{ chit.chitNumber }})@if (chit.grams) {
+                Less: Savings Scheme ({{ chit.chitNumber }})@if (chit.grams) {
                   &nbsp;{{ chit.grams | weight }} at {{ chit.ratePerGram | inr: 'whole' }}
                 }
               </td>
@@ -248,10 +248,10 @@ export class InvoicePrintComponent {
   );
 
   /**
-   * The chits that settled this bill.
+   * The savings schemes that settled this bill.
    *
    * <p>A cancelled invoice still shows them: the bill is kept as the record of
-   * what was issued, and what was issued had the chit on it, even though the
+   * what was issued, and what was issued had the scheme on it, even though the
    * value has since gone back to the customer.
    */
   protected readonly activeChits = computed(() =>

@@ -278,13 +278,14 @@ function toNumber(value: string): number | null {
             </section>
           }
 
-          <!-- Chits -->
+          <!-- Savings schemes -->
           @if (customer() && chitOptions().length) {
             <section class="card">
-              <div class="card__header"><h2 class="card__title">Chit</h2></div>
+              <div class="card__header"><h2 class="card__title">Savings scheme</h2></div>
               <div class="card__body">
                 <p class="text-muted">
-                  A matured chit comes off the total. The jewellery is still taxed in full - the chit
+                  A matured savings scheme comes off the total. The jewellery is still taxed in
+                  full - the scheme
                   settles what is payable.
                 </p>
                 <div class="table-wrapper">
@@ -292,7 +293,7 @@ function toNumber(value: string): number | null {
                     <thead>
                       <tr>
                         <th></th>
-                        <th>Chit</th>
+                        <th>Scheme</th>
                         <th class="td--numeric">Holds</th>
                         <th class="td--numeric">Use</th>
                         <th class="td--numeric">Rate / g</th>
@@ -402,7 +403,7 @@ function toNumber(value: string): number | null {
                   <dt>Less old gold / silver</dt><dd>- {{ calc.totals.oldMetalAdjustmentAmount | inr }}</dd>
                 }
                 @if (calc.totals.chitAdjustmentAmount > 0) {
-                  <dt>Less chit</dt><dd>- {{ calc.totals.chitAdjustmentAmount | inr }}</dd>
+                  <dt>Less savings scheme</dt><dd>- {{ calc.totals.chitAdjustmentAmount | inr }}</dd>
                 }
                 @if (calc.totals.roundOffAmount !== 0) {
                   <dt>Round off</dt><dd>{{ calc.totals.roundOffAmount | inr }}</dd>
@@ -492,7 +493,7 @@ export class SaleEditorComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly chitApi = inject(ChitApiService);
-  /** A chit to tick as soon as its customer's chits arrive. */
+  /** A scheme to tick as soon as its customer's schemes arrive. */
   private preselectedChit: number | null = null;
   private readonly serialInputs = viewChildren<ElementRef<HTMLInputElement>>('serialInput');
   private readonly scanBox = viewChild<ElementRef<HTMLInputElement>>('scanBox');
@@ -512,7 +513,7 @@ export class SaleEditorComponent {
   /** Bill id -> amount typed, for the bills ticked. */
   protected readonly adjustments = signal<Record<number, string>>({});
   protected readonly chitOptions = signal<ChitSummary[]>([]);
-  /** Chit id -> what to take off it, for the chits ticked. */
+  /** Scheme id -> what to take off it, for the schemes ticked. */
   protected readonly chits = signal<Record<number, { amount: string; grams: string; rate: string }>>({});
 
   protected readonly calculation = signal<SaleCalculation | null>(null);
@@ -621,7 +622,7 @@ export class SaleEditorComponent {
           .list({ page: 0, size: 20 }, { customerId: selected.id, status: 'MATURED' })
           .subscribe((page) => {
             this.chitOptions.set(page.content);
-            // Arrived from "buy jewellery with it": tick that chit straight away.
+            // Arrived from "buy jewellery with it": tick that scheme straight away.
             const wanted = this.preselectedChit;
             const option = wanted ? page.content.find((c) => c.id === wanted) : undefined;
             if (option) {
@@ -633,7 +634,7 @@ export class SaleEditorComponent {
       this.schedule();
     });
 
-    // The chit screen links here with the chit to spend.
+    // The savings scheme screen links here with the scheme to spend.
     const wanted = Number(this.route.snapshot.queryParamMap.get('chit'));
     if (wanted) {
       this.preselectedChit = wanted;

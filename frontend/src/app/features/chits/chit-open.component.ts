@@ -13,7 +13,7 @@ import { CustomerPickerComponent } from '../customers/customer-picker.component'
 import { ChitApiService } from './chit-api.service';
 
 /**
- * Starting a chit.
+ * Starting a savings scheme.
  *
  * <p>The schemes are shown as cards rather than a dropdown because what
  * separates them is what the customer ends up with - 24,000 in hand, or
@@ -27,8 +27,8 @@ import { ChitApiService } from './chit-api.service';
   imports: [RouterLink, PageHeaderComponent, SpinnerComponent, CustomerPickerComponent, InrPipe],
   template: `
     <div class="page">
-      <app-page-header title="Start a chit" subtitle="Eleven months from the customer, the twelfth from the shop.">
-        <a class="btn btn--ghost" routerLink="/chits">All chits</a>
+      <app-page-header title="Start a savings scheme" subtitle="Eleven months from the customer, the twelfth from the shop.">
+        <a class="btn btn--ghost" routerLink="/chits">All schemes</a>
       </app-page-header>
 
       @if (loading()) {
@@ -45,7 +45,7 @@ import { ChitApiService } from './chit-api.service';
           <div class="card__body">
             <h2 class="card__title">Scheme</h2>
             <p class="text-muted">
-              A money chit saves rupees. A gold chit buys gold every month at that day's rate, so
+              A money scheme saves rupees. A gold scheme buys gold every month at that day's rate, so
               what it comes to depends on how the rate moves.
             </p>
 
@@ -113,7 +113,7 @@ import { ChitApiService } from './chit-api.service';
               <span class="text-muted">Choose a customer and a scheme to start.</span>
             }
             <button type="button" class="btn btn--primary" [disabled]="!ready() || busy()" (click)="save()">
-              {{ busy() ? 'Starting...' : 'Start chit' }}
+              {{ busy() ? 'Starting...' : 'Start scheme' }}
             </button>
           </div>
         </section>
@@ -207,7 +207,7 @@ export class ChitOpenComponent implements OnInit {
           this.error.set(
             err instanceof HttpErrorResponse && isApiError(err.error)
               ? err.error.message
-              : 'Could not start the chit. Try again.',
+              : 'Could not start the savings scheme. Try again.',
           );
         },
       });

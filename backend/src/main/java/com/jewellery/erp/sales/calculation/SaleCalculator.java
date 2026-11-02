@@ -38,8 +38,8 @@ import org.springframework.stereotype.Component;
  *       piece's HSN code; lines with different rates are taxed as separate groups.
  *   <li>The discount comes off after GST.
  *   <li>Old gold / silver adjustments come off the GRAND TOTAL, giving the amount payable.
- *   <li>A matured chit comes off the same way, after the old gold. The jewellery is taxed
- *       in full either way: the chit settles what is payable, it does not reduce the sale.
+ *   <li>A matured savings scheme comes off the same way, after the old gold. The jewellery is taxed
+ *       in full either way: the scheme settles what is payable, it does not reduce the sale.
  * </ul>
  *
  * <p>A formula change is a change to this class alone.
@@ -168,7 +168,7 @@ public class SaleCalculator {
         BigDecimal afterOldMetal = grandTotal.subtract(adjustment);
         if (chit.compareTo(afterOldMetal) > 0) {
             throw new BusinessRuleException(ErrorCode.CHIT_BALANCE_EXCEEDED, "chitRedemptions",
-                    "Chit value of %s is more than the %s left to pay on this invoice."
+                    "Savings scheme value of %s is more than the %s left to pay on this invoice."
                             .formatted(chit, afterOldMetal));
         }
         BigDecimal beforeRounding = afterOldMetal.subtract(chit);

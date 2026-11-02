@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/chits")
-@Tag(name = "Chits", description = "Monthly savings towards gold, silver or money")
+@Tag(name = "Savings Schemes", description = "Monthly savings towards gold, silver or money")
 public class ChitController {
 
     private final ChitService chitService;
@@ -52,7 +52,7 @@ public class ChitController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_VIEW + "')")
-    @Operation(summary = "Chits, newest first", description = "Requires CHIT_VIEW.")
+    @Operation(summary = "Savings schemes, newest first", description = "Requires CHIT_VIEW.")
     public ResponseEntity<PageResponse<ChitDtos.Summary>> findAll(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) ChitStatus status,
@@ -64,7 +64,7 @@ public class ChitController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_VIEW + "')")
-    @Operation(summary = "One chit, with every instalment", description = "Requires CHIT_VIEW.")
+    @Operation(summary = "One scheme, with every instalment", description = "Requires CHIT_VIEW.")
     @ApiResponse(responseCode = "404", description = "Not found",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public ResponseEntity<ChitDtos.Account> findById(@PathVariable Long id) {
@@ -74,8 +74,8 @@ public class ChitController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_CREATE + "')")
-    @Operation(summary = "Start a chit",
-            description = "The scheme's terms are copied onto the chit, so later changes to the scheme do "
+    @Operation(summary = "Start a savings scheme",
+            description = "The terms are copied onto the scheme, so later changes to the offer do "
                     + "not alter one already running. Requires CHIT_CREATE.")
     public ResponseEntity<ChitDtos.Account> open(@Valid @RequestBody ChitDtos.OpenRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(chitService.open(request));
@@ -84,9 +84,9 @@ public class ChitController {
     @PostMapping("/{id}/payments")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_CREATE + "')")
     @Operation(summary = "Take one instalment",
-            description = "The amount is the scheme's, not the caller's. A gold chit needs today's rate and "
-                    + "a money chit refuses one. Requires CHIT_CREATE.")
-    @ApiResponse(responseCode = "409", description = "The chit takes no more instalments",
+            description = "The amount is the offer's, not the caller's. A gold scheme needs today's rate and "
+                    + "a money scheme refuses one. Requires CHIT_CREATE.")
+    @ApiResponse(responseCode = "409", description = "The scheme takes no more instalments",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public ResponseEntity<ChitDtos.Account> pay(
             @PathVariable Long id, @Valid @RequestBody ChitDtos.PaymentRequest request) {
@@ -95,8 +95,8 @@ public class ChitController {
 
     @PostMapping("/{id}/mature")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_EDIT + "')")
-    @Operation(summary = "Add the bonus and mature the chit",
-            description = "Refused until every instalment the customer owes is in. On a gold chit the bonus "
+    @Operation(summary = "Add the bonus and mature the scheme",
+            description = "Refused until every instalment the customer owes is in. On a gold scheme the bonus "
                     + "buys grams at the rate given. Requires CHIT_EDIT.")
     @ApiResponse(responseCode = "409", description = "Not every instalment is in, or it has already matured",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -107,10 +107,10 @@ public class ChitController {
 
     @PostMapping("/{id}/withdraw")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_EDIT + "')")
-    @Operation(summary = "Pay the chit out as cash",
-            description = "The whole balance goes and the chit closes. A gold chit needs today's rate: what it "
+    @Operation(summary = "Pay the scheme out as cash",
+            description = "The whole balance goes and the scheme closes. A gold scheme needs today's rate: what it "
                     + "is worth is what its grams fetch on the day. Requires CHIT_EDIT.")
-    @ApiResponse(responseCode = "409", description = "The chit has not matured, or has nothing left on it",
+    @ApiResponse(responseCode = "409", description = "The scheme has not matured, or has nothing left on it",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public ResponseEntity<ChitDtos.Account> withdraw(
             @PathVariable Long id, @Valid @RequestBody ChitDtos.WithdrawRequest request) {
@@ -119,8 +119,8 @@ public class ChitController {
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_DELETE + "')")
-    @Operation(summary = "Abandon a chit before it matures",
-            description = "The chit is kept, marked CANCELLED, as the record of what was paid in. Any refund "
+    @Operation(summary = "Abandon a scheme before it matures",
+            description = "The scheme is kept, marked CANCELLED, as the record of what was paid in. Any refund "
                     + "is settled at the counter. Requires CHIT_DELETE.")
     public ResponseEntity<ChitDtos.Account> cancel(
             @PathVariable Long id, @Valid @RequestBody ChitDtos.CancelRequest request) {
@@ -130,8 +130,8 @@ public class ChitController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAuthority('" + PermissionCatalog.CHIT_DELETE + "')")
-    @Operation(summary = "Delete a chit",
-            description = "Erases the chit and its instalments. Refused once it has been spent against an "
+    @Operation(summary = "Delete a savings scheme",
+            description = "Erases the scheme and its instalments. Refused once it has been spent against an "
                     + "invoice. The number is freed when it was the last issued. Requires CHIT_DELETE.")
     public void delete(@PathVariable Long id) {
         chitService.delete(id);

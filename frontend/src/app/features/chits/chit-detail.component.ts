@@ -18,9 +18,9 @@ import { ChitApiService } from './chit-api.service';
 import { ChitStatusBadgeComponent } from './chit-status-badge.component';
 
 /**
- * One chit's passbook: what has gone in, month by month, and what is left to do.
+ * One savings scheme's passbook: what has gone in, month by month, and what is left to do.
  *
- * <p>On a gold chit every instalment carries the rate it bought at, because a
+ * <p>On a gold scheme every instalment carries the rate it bought at, because a
  * customer asking "why did last month get me less gold?" is asking about the
  * rate, and the answer has to be on the page.
  */
@@ -42,8 +42,8 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
   template: `
     @if (chit(); as c) {
       <div class="page">
-        <app-page-header [title]="'Chit ' + c.chitNumber" [subtitle]="c.customerName + ' · ' + c.schemeName">
-          <a class="btn btn--ghost" routerLink="/chits">All chits</a>
+        <app-page-header [title]="'Savings scheme ' + c.chitNumber" [subtitle]="c.customerName + ' · ' + c.schemeName">
+          <a class="btn btn--ghost" routerLink="/chits">All schemes</a>
           @if (c.status === 'ACTIVE') {
             <button *appHasPermission="permissions.CHIT_CREATE" type="button" class="btn btn--primary" (click)="openPay()">
               Take payment
@@ -64,11 +64,11 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
           }
           @if (c.status === 'ACTIVE' || c.status === 'COMPLETE') {
             <button *appHasPermission="permissions.CHIT_DELETE" type="button" class="btn btn--danger" (click)="cancelOpen.set(true)">
-              Cancel chit
+              Cancel scheme
             </button>
           }
           <button *appHasPermission="permissions.CHIT_DELETE" type="button" class="btn btn--danger" (click)="deleteOpen.set(true)">
-            Delete chit
+            Delete scheme
           </button>
         </app-page-header>
 
@@ -91,7 +91,7 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
         }
         @if (c.status === 'MATURED') {
           <div class="alert alert--info">
-            The chit is the customer's to spend. They can buy jewellery with it - the chit comes off
+            The scheme is the customer's to spend. They can buy jewellery with it - it comes off
             the invoice and the jewellery is taxed as usual -
             @if (c.schemeType === 'GOLD') {
               or take the {{ c.balanceGrams | weight }} as cash, at today's rate.
@@ -257,9 +257,9 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
           <p>
             @if (c.schemeType === 'GOLD') {
               The customer takes the money instead of the gold. Their
-              <strong>{{ c.balanceGrams | weight }}</strong> is sold at the rate below, and the chit closes.
+              <strong>{{ c.balanceGrams | weight }}</strong> is sold at the rate below, and the scheme closes.
             } @else {
-              The customer takes <strong>{{ c.balanceAmount | inr: 'whole' }}</strong> and the chit closes.
+              The customer takes <strong>{{ c.balanceAmount | inr: 'whole' }}</strong> and the scheme closes.
             }
           </p>
           <div class="form-grid">
@@ -393,7 +393,7 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
       @if (cancelOpen()) {
         <app-modal [title]="'Cancel ' + c.chitNumber" (closed)="cancelOpen.set(false)">
           <p>
-            The chit stays on record, marked cancelled, as the account of what was paid in.
+            The scheme stays on record, marked cancelled, as the account of what was paid in.
             Refunding {{ c.paidAmount | inr: 'whole' }} is settled at the counter.
           </p>
           <div class="field">
@@ -403,9 +403,9 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
           </div>
           @if (error()) { <div class="alert alert--error">{{ error() }}</div> }
           <ng-container modalActions>
-            <button type="button" class="btn btn--ghost" (click)="cancelOpen.set(false)">Keep chit</button>
+            <button type="button" class="btn btn--ghost" (click)="cancelOpen.set(false)">Keep scheme</button>
             <button type="button" class="btn btn--danger" [disabled]="busy() || !reason().trim()" (click)="cancel(c)">
-              Cancel chit
+              Cancel scheme
             </button>
           </ng-container>
         </app-modal>
@@ -414,7 +414,7 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
       @if (deleteOpen()) {
         <app-modal [title]="'Delete ' + c.chitNumber" (closed)="deleteOpen.set(false)">
           <p>
-            <strong>This erases the chit and every month on it.</strong> It will not appear in the
+            <strong>This erases the savings scheme and every month on it.</strong> It will not appear in the
             books - unlike cancelling, which keeps it on record.
           </p>
           <p class="text-muted">
@@ -430,7 +430,7 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
           </div>
           @if (error()) { <div class="alert alert--error">{{ error() }}</div> }
           <ng-container modalActions>
-            <button type="button" class="btn btn--ghost" (click)="deleteOpen.set(false)">Keep chit</button>
+            <button type="button" class="btn btn--ghost" (click)="deleteOpen.set(false)">Keep scheme</button>
             <button type="button" class="btn btn--danger"
                     [disabled]="busy() || deleteConfirm().trim() !== c.chitNumber" (click)="remove(c)">
               Delete for good
@@ -512,7 +512,7 @@ export class ChitDetailComponent implements OnInit {
 
   /**
    * Months the customer paid. The stored count takes in the shop's twelfth
-   * once the chit matures, which is not something the customer paid.
+   * once the scheme matures, which is not something the customer paid.
    */
   protected paidByCustomer(chit: ChitAccount): number {
     return Math.min(chit.paidInstalments, chit.payableInstalments);
@@ -541,7 +541,7 @@ export class ChitDetailComponent implements OnInit {
     this.withdrawOpen.set(true);
   }
 
-  /** What a gold chit's balance fetches at the rate typed in, before paying it out. */
+  /** What a gold scheme's balance fetches at the rate typed in, before paying it out. */
   protected cashPreview(chit: ChitAccount): number | null {
     const rate = Number(this.rate());
     if (chit.schemeType !== 'GOLD' || !Number.isFinite(rate) || rate <= 0) {
@@ -569,7 +569,7 @@ export class ChitDetailComponent implements OnInit {
             `${updated.chitNumber} paid out and closed.`,
           );
         },
-        error: (err: unknown) => this.fail(err, 'Could not pay the chit out. Try again.'),
+        error: (err: unknown) => this.fail(err, 'Could not pay the scheme out. Try again.'),
       });
   }
 
@@ -619,7 +619,7 @@ export class ChitDetailComponent implements OnInit {
           this.chit.set(updated);
           this.notifications.success(`${updated.chitNumber} matured. The bonus is in.`);
         },
-        error: (err: unknown) => this.fail(err, 'Could not mature the chit. Try again.'),
+        error: (err: unknown) => this.fail(err, 'Could not mature the scheme. Try again.'),
       });
   }
 
@@ -633,7 +633,7 @@ export class ChitDetailComponent implements OnInit {
         this.chit.set(updated);
         this.notifications.success(`${updated.chitNumber} cancelled.`);
       },
-      error: (err: unknown) => this.fail(err, 'Could not cancel the chit. Try again.'),
+      error: (err: unknown) => this.fail(err, 'Could not cancel the scheme. Try again.'),
     });
   }
 
@@ -647,7 +647,7 @@ export class ChitDetailComponent implements OnInit {
         this.notifications.success(`Chit ${chit.chitNumber} deleted.`);
         void this.router.navigate(['/chits']);
       },
-      error: (err: unknown) => this.fail(err, 'Could not delete the chit. Try again.'),
+      error: (err: unknown) => this.fail(err, 'Could not delete the scheme. Try again.'),
     });
   }
 

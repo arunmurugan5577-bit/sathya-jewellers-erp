@@ -67,7 +67,7 @@ public final class SaleDtos {
             @Schema(example = "111.00") BigDecimal discountAmount,
             @Schema(example = "7000.00") BigDecimal grandTotal,
             BigDecimal oldMetalAdjustmentAmount,
-            @Schema(example = "36000.00", description = "Matured chit value put against this invoice")
+            @Schema(example = "36000.00", description = "Matured savings scheme value put against this invoice")
             BigDecimal chitAdjustmentAmount,
             BigDecimal roundOffAmount,
             BigDecimal netPayable,
@@ -97,8 +97,8 @@ public final class SaleDtos {
             Long chitAccountId,
             @Schema(example = "CH-2026-000001") String chitNumber,
             @Schema(example = "GOLD") String schemeType,
-            @Schema(example = "2.632", description = "Gold chits only") BigDecimal grams,
-            @Schema(example = "14800.00", description = "Gold chits only") BigDecimal ratePerGram,
+            @Schema(example = "2.632", description = "Gold schemes only") BigDecimal grams,
+            @Schema(example = "14800.00", description = "Gold schemes only") BigDecimal ratePerGram,
             BigDecimal amount,
             String status) {}
 

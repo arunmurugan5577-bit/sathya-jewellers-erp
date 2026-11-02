@@ -116,7 +116,7 @@ public class ChitService {
     public ChitDtos.Account open(ChitDtos.OpenRequest request) {
         Customer customer = customerService.requireActive(request.customerId());
         ChitScheme scheme = schemeRepository.findById(request.schemeId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Chit scheme", request.schemeId()));
+                .orElseThrow(() -> ResourceNotFoundException.of("Savings scheme", request.schemeId()));
         if (!scheme.isActive()) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "schemeId",
                     "Scheme %s is no longer offered.".formatted(scheme.getName()));
@@ -136,7 +136,7 @@ public class ChitService {
         account.setChitNumber(documentNumberService.next(DocumentSeries.CHIT_ACCOUNT, startedOn));
 
         ChitAccount saved = accountRepository.saveAndFlush(account);
-        log.info("Chit {} opened for {} on {}: {} x {} instalments",
+        log.info("Savings scheme {} opened for {} on {}: {} x {} instalments",
                 saved.getChitNumber(), customer.getCustomerCode(), scheme.getName(),
                 scheme.getMonthlyAmount(), scheme.getPayableInstalments());
         return mapper.toAccount(requireDetailed(saved.getId()));
@@ -158,12 +158,12 @@ public class ChitService {
         ChitAccount account = lock(id);
         if (account.getStatus() != ChitStatus.ACTIVE) {
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                    "Chit %s is %s and takes no more instalments."
+                    "Savings scheme %s is %s and takes no more instalments."
                             .formatted(account.getChitNumber(), account.getStatus().name().toLowerCase()));
         }
         if (account.getPaidInstalments() >= account.getPayableInstalments()) {
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                    "Chit %s has had all %d instalments. Add the bonus to mature it."
+                    "Savings scheme %s has had all %d instalments. Add the bonus to mature it."
                             .formatted(account.getChitNumber(), account.getPayableInstalments()));
         }
         LocalDate paidOn = resolveDate(request.paidOn(), "paidOn");
@@ -176,7 +176,7 @@ public class ChitService {
 
         account.applyPayment(payment);
         accountRepository.flush();
-        log.info("Chit {}: instalment {} of {} taken, {}{}",
+        log.info("Savings scheme {}: instalment {} of {} taken, {}{}",
                 account.getChitNumber(), payment.getInstalmentNo(), account.getPayableInstalments(),
                 payment.getAmount(), payment.getGrams() == null ? "" : " buying " + payment.getGrams() + " g");
         return mapper.toAccount(requireDetailed(id));
@@ -195,11 +195,11 @@ public class ChitService {
         ChitAccount account = lock(id);
         if (account.getStatus() == ChitStatus.MATURED || account.getStatus() == ChitStatus.CLOSED) {
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                    "Chit %s has already matured.".formatted(account.getChitNumber()));
+                    "Savings scheme %s has already matured.".formatted(account.getChitNumber()));
         }
         if (account.getStatus() != ChitStatus.COMPLETE) {
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                    ("Chit %s has had %d of its %d instalments. It matures once the last one is in.")
+                    ("Savings scheme %s has had %d of its %d instalments. It matures once the last one is in.")
                             .formatted(account.getChitNumber(), account.getPaidInstalments(),
                                     account.getPayableInstalments()));
         }
@@ -216,7 +216,7 @@ public class ChitService {
         }
         account.mature(maturedOn);
         accountRepository.flush();
-        log.info("Chit {} matured: {} bonus month(s) added, balance {}{}",
+        log.info("Savings scheme {} matured: {} bonus month(s) added, balance {}{}",
                 account.getChitNumber(), bonusMonths, account.getBalanceAmount(),
                 account.isGold() ? " / " + account.getBalanceGrams() + " g" : "");
         return mapper.toAccount(requireDetailed(id));
@@ -249,14 +249,14 @@ public class ChitService {
         if (account.isGold()) {
             if (request.ratePerGram() == null) {
                 throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "ratePerGram",
-                        "Chit %s holds gold. Enter today's rate to say what it is worth."
+                        "Savings scheme %s holds gold. Enter today's rate to say what it is worth."
                                 .formatted(account.getChitNumber()));
             }
             redemption.setGrams(account.getBalanceGrams());
             redemption.setRatePerGram(Money.money(request.ratePerGram()));
         } else if (request.ratePerGram() != null) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "ratePerGram",
-                    "Chit %s holds money, not gold. It takes no rate."
+                    "Savings scheme %s holds money, not gold. It takes no rate."
                             .formatted(account.getChitNumber()));
         }
         redemption.setAmount(calculator.cashValue(
@@ -264,7 +264,7 @@ public class ChitService {
 
         account.redeem(redemption);
         accountRepository.flush();
-        log.info("Chit {} withdrawn as cash: {}{}", account.getChitNumber(), redemption.getAmount(),
+        log.info("Savings scheme {} withdrawn as cash: {}{}", account.getChitNumber(), redemption.getAmount(),
                 redemption.getGrams() == null ? "" : " for " + redemption.getGrams() + " g");
         return mapper.toAccount(requireDetailed(id));
     }
@@ -281,11 +281,11 @@ public class ChitService {
         ChitAccount account = lock(id);
         if (account.getStatus() == ChitStatus.CANCELLED) {
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                    "Chit %s is already cancelled.".formatted(account.getChitNumber()));
+                    "Savings scheme %s is already cancelled.".formatted(account.getChitNumber()));
         }
         if (account.getStatus() == ChitStatus.CLOSED) {
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                    "Chit %s has been spent and cannot be cancelled.".formatted(account.getChitNumber()));
+                    "Savings scheme %s has been spent and cannot be cancelled.".formatted(account.getChitNumber()));
         }
         account.setStatus(ChitStatus.CANCELLED);
         account.setClosedOn(businessClock.today());
@@ -295,7 +295,7 @@ public class ChitService {
         account.setBalanceAmount(Money.ZERO);
         account.setBalanceGrams(Money.weight(BigDecimal.ZERO));
         accountRepository.flush();
-        log.info("Chit {} cancelled by {} after {} instalment(s)", account.getChitNumber(),
+        log.info("Savings scheme {} cancelled by {} after {} instalment(s)", account.getChitNumber(),
                 SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER), account.getPaidInstalments());
         return mapper.toAccount(requireDetailed(id));
     }
@@ -318,9 +318,9 @@ public class ChitService {
                     .anyMatch(r -> r.isActive() && r.getKind() == RedemptionKind.SALE);
             throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
                     onInvoice
-                            ? ("Chit %s has been spent against an invoice and cannot be deleted. "
+                            ? ("Savings scheme %s has been spent against an invoice and cannot be deleted. "
                                     + "Delete that invoice first.").formatted(account.getChitNumber())
-                            : "Chit %s has been paid out and cannot be deleted."
+                            : "Savings scheme %s has been paid out and cannot be deleted."
                                     .formatted(account.getChitNumber()));
         }
         String number = account.getChitNumber();
@@ -329,7 +329,7 @@ public class ChitService {
 
         accountRepository.delete(account);
         accountRepository.flush();
-        log.warn("Chit {} DELETED by {}: {} instalment(s) erased, number {}", number,
+        log.warn("Savings scheme {} DELETED by {}: {} instalment(s) erased, number {}", number,
                 SecurityUtils.currentUsername().orElse(SecurityUtils.SYSTEM_USER),
                 account.getPaidInstalments(),
                 numberFreed ? "freed for reuse" : "not reusable - it was not the last issued");
@@ -358,14 +358,14 @@ public class ChitService {
         if (account.isGold()) {
             if (ratePerGram == null) {
                 throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "ratePerGram",
-                        "Chit %s saves in gold. Enter today's rate so the instalment can buy grams."
+                        "Savings scheme %s saves in gold. Enter today's rate so the instalment can buy grams."
                                 .formatted(account.getChitNumber()));
             }
             payment.setRatePerGram(Money.money(ratePerGram));
             payment.setGrams(calculator.gramsFor(payment.getAmount(), payment.getRatePerGram()));
         } else if (ratePerGram != null) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "ratePerGram",
-                    "Chit %s saves money, not gold. It takes no rate."
+                    "Savings scheme %s saves money, not gold. It takes no rate."
                             .formatted(account.getChitNumber()));
         }
         return payment;
@@ -387,7 +387,7 @@ public class ChitService {
             case MATURED -> "has nothing left on it";
         };
         throw new StateConflictException(ErrorCode.VALIDATION_FAILED, "status",
-                "Chit %s %s.".formatted(account.getChitNumber(), reason));
+                "Savings scheme %s %s.".formatted(account.getChitNumber(), reason));
     }
 
     private static PaymentMethod parseMethod(String method) {
@@ -417,12 +417,12 @@ public class ChitService {
 
     private ChitAccount requireDetailed(Long id) {
         return accountRepository.findDetailedById(id)
-                .orElseThrow(() -> ResourceNotFoundException.of("Chit", id));
+                .orElseThrow(() -> ResourceNotFoundException.of("Savings scheme", id));
     }
 
     private ChitAccount lock(Long id) {
         return accountRepository.lockById(id)
-                .orElseThrow(() -> ResourceNotFoundException.of("Chit", id));
+                .orElseThrow(() -> ResourceNotFoundException.of("Savings scheme", id));
     }
 
     private Specification<ChitAccount> matching(

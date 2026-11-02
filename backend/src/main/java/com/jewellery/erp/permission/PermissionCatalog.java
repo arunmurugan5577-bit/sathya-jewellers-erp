@@ -125,13 +125,13 @@ public final class PermissionCatalog {
     /** Cancel a wholesale estimate. */
     public static final String WHOLESALE_DELETE = "WHOLESALE_DELETE";
 
-    /** Open chits and see their balances. */
+    /** Open savings schemes and see their balances. */
     public static final String CHIT_VIEW = "CHIT_VIEW";
-    /** Start a chit and record its instalments. */
+    /** Start a savings scheme and record its instalments. */
     public static final String CHIT_CREATE = "CHIT_CREATE";
-    /** Mature a chit and redeem it. */
+    /** Mature a savings scheme and redeem it. */
     public static final String CHIT_EDIT = "CHIT_EDIT";
-    /** Cancel or delete a chit. */
+    /** Cancel or delete a savings scheme. */
     public static final String CHIT_DELETE = "CHIT_DELETE";
 
     public static final String REPORT_WHOLESALE_VIEW = "REPORT_WHOLESALE_VIEW";
@@ -151,7 +151,7 @@ public final class PermissionCatalog {
             new ModuleDescriptor(MODULE_OLD_METAL, "Old Gold / Silver"),
             new ModuleDescriptor(MODULE_CUSTOMER, "Customers"),
             new ModuleDescriptor(MODULE_WHOLESALE, "Wholesale"),
-            new ModuleDescriptor(MODULE_CHIT, "Chits"),
+            new ModuleDescriptor(MODULE_CHIT, "Savings Schemes"),
             new ModuleDescriptor(MODULE_INVENTORY_SERIAL, "Serial Numbering"),
             new ModuleDescriptor(MODULE_LABEL, "Label Printing"),
             new ModuleDescriptor(MODULE_REPORT_SALES, "Sales Report"),

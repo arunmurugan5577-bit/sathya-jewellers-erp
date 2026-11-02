@@ -19,10 +19,10 @@ import { ChitApiService } from './chit-api.service';
 import { ChitStatusBadgeComponent } from './chit-status-badge.component';
 
 /**
- * Every chit the shop is running.
+ * Every savings scheme the shop is running.
  *
  * <p>The two kinds are shown side by side but counted differently: a money
- * chit's balance is rupees, a gold chit's is grams. Mixing them into one
+ * scheme's balance is rupees, a gold scheme's is grams. Mixing them into one
  * "balance" column would read as a total that means nothing, so each row shows
  * the one that applies to it.
  */
@@ -34,11 +34,11 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
   template: `
     <div class="page">
       <app-page-header
-        title="Chits"
+        title="Savings Schemes"
         subtitle="Eleven months from the customer, the twelfth from the shop."
       >
         <a class="btn btn--primary" routerLink="/chits/new" *appHasPermission="permissions.CHIT_CREATE">
-          + Start a chit
+          + Start a scheme
         </a>
       </app-page-header>
 
@@ -50,7 +50,7 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
               id="search"
               class="input"
               type="search"
-              placeholder="Chit number, name or mobile"
+              placeholder="Scheme number, name or mobile"
               autocomplete="off"
               [value]="search()"
               (input)="onSearch($any($event.target).value)"
@@ -78,13 +78,13 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
         @if (loading()) {
           <p class="card__body text-muted">Loading...</p>
         } @else if (!rows().length) {
-          <p class="card__body text-muted">No chits match this.</p>
+          <p class="card__body text-muted">No savings schemes match this.</p>
         } @else {
           <div class="table-wrap">
             <table class="table">
               <thead>
                 <tr>
-                  <th>Chit No</th>
+                  <th>Scheme No</th>
                   <th>Customer</th>
                   <th>Scheme</th>
                   <th class="num">Monthly</th>
@@ -126,7 +126,7 @@ import { ChitStatusBadgeComponent } from './chit-status-badge.component';
           </div>
 
           <div class="card__body pager">
-            <span class="text-muted">{{ total() }} chit(s)</span>
+            <span class="text-muted">{{ total() }} scheme(s)</span>
             <span>
               <button type="button" class="btn btn--sm" [disabled]="page() === 0" (click)="go(page() - 1)">Previous</button>
               <button type="button" class="btn btn--sm" [disabled]="last()" (click)="go(page() + 1)">Next</button>
@@ -168,7 +168,7 @@ export class ChitListComponent {
 
   protected readonly last = computed(() => this.page() + 1 >= this.totalPages());
 
-  /** Typing a chit number should not send a request per keystroke. */
+  /** Typing a scheme number should not send a request per keystroke. */
   private readonly typed = new Subject<string>();
 
   constructor() {
@@ -194,7 +194,7 @@ export class ChitListComponent {
   /**
    * Months the customer paid.
    *
-   * The stored count takes in the shop's twelfth once the chit matures, and
+   * The stored count takes in the shop's twelfth once the scheme matures, and
    * "12 / 11" in a column headed Paid reads as an overpayment. The bonus gets
    * its own mark instead.
    */
