@@ -2,6 +2,7 @@ package com.jewellery.erp.dashboard.controller;
 
 import com.jewellery.erp.dashboard.dto.DashboardSummaryDto;
 import com.jewellery.erp.dashboard.dto.StockByCategoryDto;
+import com.jewellery.erp.dashboard.dto.StockByItemTypeDto;
 import com.jewellery.erp.dashboard.service.DashboardService;
 import com.jewellery.erp.permission.PermissionCatalog;
 import java.util.List;
@@ -30,6 +31,16 @@ public class DashboardController {
 
     public DashboardController(DashboardService dashboardService) {
         this.dashboardService = dashboardService;
+    }
+
+    @GetMapping("/stock-by-item-type")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.INVENTORY_VIEW + "')")
+    @Operation(
+            summary = "Stock on the shelf, by item type",
+            description = "Gold, silver and the rest, with nothing listed that has no stock. "
+                    + "Requires INVENTORY_VIEW.")
+    public ResponseEntity<List<StockByItemTypeDto>> stockByItemType() {
+        return ResponseEntity.ok(dashboardService.stockByItemType());
     }
 
     @GetMapping("/stock-by-category")

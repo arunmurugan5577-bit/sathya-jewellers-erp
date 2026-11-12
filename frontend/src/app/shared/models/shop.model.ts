@@ -17,6 +17,14 @@ export interface ShopSettings extends Audited {
 export type ShopSettingsRequest = Omit<ShopSettings, 'id' | keyof Audited>;
 
 /** Dashboard counters. A missing field means the user may not see that metric. */
+/** What the shop holds of one item type - gold, silver, and the rest. */
+export interface StockByItemType {
+  itemTypeId: number;
+  itemTypeName: string;
+  items: number;
+  weightGrams: number;
+}
+
 /** What the shop holds under one sub category. */
 export interface StockBySubCategory {
   /** Null for pieces filed under no sub category. */

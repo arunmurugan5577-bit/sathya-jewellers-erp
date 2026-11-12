@@ -3,6 +3,7 @@ package com.jewellery.erp.dashboard.service;
 import com.jewellery.erp.category.service.CategoryService;
 import com.jewellery.erp.dashboard.dto.DashboardSummaryDto;
 import com.jewellery.erp.dashboard.dto.StockByCategoryDto;
+import com.jewellery.erp.dashboard.dto.StockByItemTypeDto;
 import java.util.List;
 import com.jewellery.erp.inventory.service.InventoryItemService;
 import com.jewellery.erp.permission.PermissionCatalog;
@@ -49,6 +50,11 @@ public class DashboardService {
      */
     public List<StockByCategoryDto> stockByCategory() {
         return inventoryItemService.stockByCategory();
+    }
+
+    /** What the shop holds of each item type, for the gold and silver cards. */
+    public List<StockByItemTypeDto> stockByItemType() {
+        return inventoryItemService.stockByItemType();
     }
 
     public DashboardSummaryDto summarise() {

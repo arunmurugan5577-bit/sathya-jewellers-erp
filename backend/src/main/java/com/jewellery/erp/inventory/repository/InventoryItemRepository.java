@@ -114,4 +114,23 @@ public interface InventoryItemRepository
              order by c.name asc, sc.name asc
             """)
     List<StockGroupRow> stockByCategory();
+
+    /**
+     * The same stock, grouped by what it is made of.
+     *
+     * <p>Gold, silver and whatever else the shop files pieces under. Item
+     * types with nothing on the shelf do not appear: a card reading zero is
+     * a card the counter has to read past.
+     */
+    @Query("""
+            select new com.jewellery.erp.inventory.repository.StockMetalRow(
+                       t.id, t.name, count(i), coalesce(sum(i.remainingWeightGrams), 0))
+              from InventoryItem i
+              join i.itemType t
+             where i.active = true
+               and i.status = com.jewellery.erp.inventory.entity.InventoryStatus.AVAILABLE
+             group by t.id, t.name
+             order by t.name asc
+            """)
+    List<StockMetalRow> stockByItemType();
 }

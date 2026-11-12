@@ -23,8 +23,10 @@ import com.jewellery.erp.inventory.entity.InventoryItem;
 import com.jewellery.erp.inventory.entity.InventoryStatus;
 import com.jewellery.erp.inventory.mapper.InventoryItemMapper;
 import com.jewellery.erp.dashboard.dto.StockByCategoryDto;
+import com.jewellery.erp.dashboard.dto.StockByItemTypeDto;
 import com.jewellery.erp.inventory.repository.InventoryItemRepository;
 import com.jewellery.erp.inventory.repository.StockGroupRow;
+import com.jewellery.erp.inventory.repository.StockMetalRow;
 import com.jewellery.erp.inventory.spec.InventoryItemSpecifications;
 import com.jewellery.erp.itemtype.entity.ItemType;
 import com.jewellery.erp.itemtype.service.ItemTypeService;
@@ -219,6 +221,14 @@ public class InventoryItemService {
                     rows.get(0).categoryId(), rows.get(0).categoryName(), items, Money.weight(weight), subs));
         }
         return categories;
+    }
+
+    /** What is on the shelf, by item type. Gold and silver, for the landing page. */
+    public List<StockByItemTypeDto> stockByItemType() {
+        return inventoryItemRepository.stockByItemType().stream()
+                .map(row -> new StockByItemTypeDto(
+                        row.itemTypeId(), row.itemTypeName(), row.items(), Money.weight(row.weightGrams())))
+                .toList();
     }
 
     // ------------------------------------------------------------ commands ---

@@ -7,7 +7,7 @@ import { Permissions } from '../../core/auth/permissions';
 import { ApiService } from '../../core/services/api.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { SpinnerComponent } from '../../shared/components/spinner.component';
-import { DashboardSummary, StockByCategory } from '../../shared/models/shop.model';
+import { DashboardSummary, StockByCategory, StockByItemType } from '../../shared/models/shop.model';
 // Used to format the stock-weight metric in TypeScript, not in the template.
 import { WeightPipe } from '../../shared/pipes/weight.pipe';
 
@@ -89,6 +89,24 @@ const tileIcons = {
                   <ng-container [ngTemplateOutlet]="tile" />
                 </div>
               }
+            }
+          </div>
+        }
+
+        @if (metals().length) {
+          <div class="metrics">
+            @for (metal of metals(); track metal.itemTypeId) {
+              <a class="metric metric--link" [routerLink]="'/inventory'"
+                 [queryParams]="{ itemTypeId: metal.itemTypeId, status: 'AVAILABLE', active: true }">
+                <span class="metric__head">
+                  <span class="eyebrow">{{ metal.itemTypeName }}</span>
+                  <span class="icon-badge icon-badge--gold" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path [attr.d]="icons.scale" /></svg>
+                  </span>
+                </span>
+                <span class="figure">{{ metal.items }}</span>
+                <span class="metric__hint">{{ metal.weightGrams | weight }} in stock</span>
+              </a>
             }
           </div>
         }
@@ -292,6 +310,17 @@ export class DashboardComponent {
     return actions;
   });
 
+  /**
+   * One card per item type that has stock, each a link into the item list
+   * filtered to it - the shop asked to click Gold and see the gold.
+   *
+   * <p>Fetched with the summary rather than on demand, because unlike the
+   * breakdown below it is a handful of numbers and it is the thing the
+   * counter reaches for first.
+   */
+  protected readonly metals = signal<StockByItemType[]>([]);
+  protected readonly icons = tileIcons;
+
   protected readonly stock = signal<StockByCategory[]>([]);
   protected readonly stockOpen = signal(false);
   protected readonly stockLoading = signal(false);
@@ -325,6 +354,10 @@ export class DashboardComponent {
   }
 
   constructor() {
+    if (this.auth.has(Permissions.INVENTORY_VIEW)) {
+      this.api.get<StockByItemType[]>('/dashboard/stock-by-item-type')
+          .subscribe({ next: (rows) => this.metals.set(rows) });
+    }
     this.api.get<DashboardSummary>('/dashboard/summary').subscribe({
       next: (summary) => {
         this.summary.set(summary);

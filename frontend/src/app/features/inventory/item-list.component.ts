@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { Permissions } from '../../core/auth/permissions';
@@ -269,6 +269,7 @@ export class ItemListComponent {
   private readonly notifications = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
 
   private readonly serialInput$ = new Subject<string>();
 
@@ -293,6 +294,22 @@ export class ItemListComponent {
 
     this.itemTypeService.lookup().subscribe({ next: (values) => this.itemTypes.set(values) });
     this.categoryService.lookup().subscribe({ next: (values) => this.categories.set(values) });
+
+    // Arrived from a dashboard card - "Gold", "Silver" - which links here
+    // with the item type it counts, and with the stock it counted: active and
+    // unsold. Landing on anything wider would show more pieces than the card
+    // said there were. Every one of them shows in the selects below, so the
+    // counter can see what they are looking at and widen it from there.
+    const params = this.route.snapshot.queryParamMap;
+    const itemTypeId = Number(params.get('itemTypeId'));
+    if (itemTypeId) {
+      this.filters.update((current) => ({
+        ...current,
+        itemTypeId,
+        status: params.get('status') === 'AVAILABLE' ? 'AVAILABLE' : current.status,
+        active: params.get('active') === 'true' ? true : current.active,
+      }));
+    }
     this.reload(0);
   }
 
