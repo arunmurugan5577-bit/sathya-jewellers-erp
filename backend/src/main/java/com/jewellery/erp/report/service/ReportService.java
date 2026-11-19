@@ -76,6 +76,14 @@ public class ReportService {
         return preview(stockDefinition(filter));
     }
 
+    public ReportPreview previewStockSummary(StockSummaryFilter filter) {
+        return preview(stockSummaryDefinition(filter));
+    }
+
+    public ReportFile exportStockSummary(StockSummaryFilter filter) {
+        return export(stockSummaryDefinition(filter));
+    }
+
     public ReportPreview previewSales(SalesReportFilter filter) {
         return preview(salesDefinition(filter));
     }
@@ -111,6 +119,24 @@ public class ReportService {
             labels.put("subCategory", name("sub_categories", "name", filter.subCategoryId()));
         }
         return definitions.stock(filter, labels);
+    }
+
+    /**
+     * No date range to check: the sheet counts what is on the shelf, and the
+     * day it is true of is today.
+     */
+    private ReportDefinition stockSummaryDefinition(StockSummaryFilter filter) {
+        Map<String, String> labels = new HashMap<>();
+        if (filter.itemTypeId() != null) {
+            labels.put("itemType", name("item_types", "name", filter.itemTypeId()));
+        }
+        if (filter.categoryId() != null) {
+            labels.put("category", name("categories", "name", filter.categoryId()));
+        }
+        if (filter.subCategoryId() != null) {
+            labels.put("subCategory", name("sub_categories", "name", filter.subCategoryId()));
+        }
+        return definitions.stockSummary(filter, labels, businessClock.today());
     }
 
     private ReportDefinition salesDefinition(SalesReportFilter filter) {

@@ -40,6 +40,9 @@ function isoDate(date: Date): string {
         @if (canView('stock')) {
           <button type="button" role="tab" class="tab" [class.tab--active]="kind() === 'stock'" (click)="switchTo('stock')">Stock report</button>
         }
+        @if (canView('stock-sheet')) {
+          <button type="button" role="tab" class="tab" [class.tab--active]="kind() === 'stock-sheet'" (click)="switchTo('stock-sheet')">Stock sheet</button>
+        }
         @if (canView('wholesale')) {
           <button type="button" role="tab" class="tab" [class.tab--active]="kind() === 'wholesale'" (click)="switchTo('wholesale')">Wholesale report</button>
         }
@@ -47,14 +50,17 @@ function isoDate(date: Date): string {
 
       <section class="card">
         <div class="toolbar">
-          <div class="toolbar__field">
-            <label class="toolbar__label" for="start">Start date *</label>
-            <input id="start" class="input" type="date" [value]="startDate()" (change)="startDate.set($any($event.target).value)" />
-          </div>
-          <div class="toolbar__field">
-            <label class="toolbar__label" for="end">End date *</label>
-            <input id="end" class="input" type="date" [value]="endDate()" (change)="endDate.set($any($event.target).value)" />
-          </div>
+          <!-- The stock sheet is what is on the shelf now, so it has no period. -->
+          @if (kind() !== 'stock-sheet') {
+            <div class="toolbar__field">
+              <label class="toolbar__label" for="start">Start date *</label>
+              <input id="start" class="input" type="date" [value]="startDate()" (change)="startDate.set($any($event.target).value)" />
+            </div>
+            <div class="toolbar__field">
+              <label class="toolbar__label" for="end">End date *</label>
+              <input id="end" class="input" type="date" [value]="endDate()" (change)="endDate.set($any($event.target).value)" />
+            </div>
+          }
 
           @if (kind() === 'wholesale') {
             <div class="toolbar__field">
@@ -110,6 +116,7 @@ function isoDate(date: Date): string {
                 }
               </select>
             </div>
+            @if (kind() === 'stock') {
             <div class="toolbar__field">
               <label class="toolbar__label" for="stockStatus">Status</label>
               <select id="stockStatus" class="select" (change)="stockStatus.set($any($event.target).value)">
@@ -118,6 +125,7 @@ function isoDate(date: Date): string {
                 <option value="SOLD">Sold</option>
               </select>
             </div>
+            }
           }
 
           <div class="toolbar__spacer"></div>
@@ -130,6 +138,12 @@ function isoDate(date: Date): string {
         </div>
         @if (kind() === 'stock') {
           <p class="hint text-muted">Pieces stocked in between the dates. Weights are net weights; gross weight is set at sale time.</p>
+        }
+        @if (kind() === 'stock-sheet') {
+          <p class="hint text-muted">
+            What is on the shelf now - active, unsold pieces - counted into weight bands. A part-sold
+            box is banded by the weight still in it.
+          </p>
         }
         @if (error()) {
           <div class="alert alert--error hint">{{ error() }}</div>
@@ -230,6 +244,7 @@ export class ReportsComponent {
   private static readonly RIGHTS: Record<ReportKind, { view: string; export: string }> = {
     sales: { view: Permissions.REPORT_SALES_VIEW, export: Permissions.REPORT_SALES_EXPORT },
     stock: { view: Permissions.REPORT_STOCK_VIEW, export: Permissions.REPORT_STOCK_EXPORT },
+    'stock-sheet': { view: Permissions.REPORT_STOCK_VIEW, export: Permissions.REPORT_STOCK_EXPORT },
     wholesale: { view: Permissions.REPORT_WHOLESALE_VIEW, export: Permissions.REPORT_WHOLESALE_EXPORT },
   };
 
@@ -248,7 +263,7 @@ export class ReportsComponent {
 
   /** Opens on the first report this user may actually see. */
   private firstVisibleKind(): ReportKind {
-    const order: ReportKind[] = ['sales', 'stock', 'wholesale'];
+    const order: ReportKind[] = ['sales', 'stock', 'stock-sheet', 'wholesale'];
     return order.find((kind) => this.auth.has(ReportsComponent.RIGHTS[kind].view)) ?? 'sales';
   }
 
@@ -367,6 +382,13 @@ export class ReportsComponent {
         return { ...base, status: this.salesStatus(), paymentStatus: this.paymentStatus() };
       case 'wholesale':
         return { ...base, status: this.wholesaleStatus() };
+      case 'stock-sheet':
+        // No dates: the sheet counts the shelf as it stands.
+        return {
+          itemTypeId: this.itemTypeId(),
+          categoryId: this.categoryId(),
+          subCategoryId: this.subCategoryId(),
+        };
       default:
         return {
           ...base,

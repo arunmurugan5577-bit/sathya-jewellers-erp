@@ -8,6 +8,7 @@ import com.jewellery.erp.wholesale.entity.WholesaleStatus;
 import com.jewellery.erp.report.service.ReportService;
 import com.jewellery.erp.report.service.SalesReportFilter;
 import com.jewellery.erp.report.service.StockReportFilter;
+import com.jewellery.erp.report.service.StockSummaryFilter;
 import com.jewellery.erp.sales.entity.PaymentStatus;
 import com.jewellery.erp.sales.entity.SaleStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -76,6 +77,30 @@ public class ReportController {
         return download(reportService.exportStock(
                 new StockReportFilter(
                         startDate, endDate, itemTypeId, categoryId, subCategoryId, status, includeInactive)));
+    }
+
+    @GetMapping("/stock-sheet/preview")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.REPORT_STOCK_VIEW + "')")
+    @Operation(summary = "Preview the stock sheet",
+            description = "Pieces on the shelf counted into weight bands, by item type, category and sub "
+                    + "category. No dates: it is what is in stock now. Requires REPORT_STOCK_VIEW.")
+    public ResponseEntity<ReportPreview> previewStockSheet(
+            @RequestParam(required = false) Long itemTypeId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId) {
+        return ResponseEntity.ok(reportService.previewStockSummary(
+                new StockSummaryFilter(itemTypeId, categoryId, subCategoryId)));
+    }
+
+    @GetMapping("/stock-sheet/export")
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.REPORT_STOCK_EXPORT + "')")
+    @Operation(summary = "Download the stock sheet as Excel", description = "Requires REPORT_STOCK_EXPORT.")
+    public ResponseEntity<InputStreamResource> exportStockSheet(
+            @RequestParam(required = false) Long itemTypeId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId) throws IOException {
+        return download(reportService.exportStockSummary(
+                new StockSummaryFilter(itemTypeId, categoryId, subCategoryId)));
     }
 
     @GetMapping("/sales/preview")

@@ -47,6 +47,55 @@ public class ReportDefinitions {
             text("invoiceNumber", "Sold On Invoice", 18),
             date("invoiceDate", "Sold Date"));
 
+    private static final List<ReportColumn> STOCK_SUMMARY_COLUMNS = List.of(
+            text("itemType", "Item Type", 12),
+            text("category", "Category", 18),
+            text("subCategory", "Sub Category", 18),
+            text("band", "Weight", 16),
+            integer("items", "Pieces", true),
+            weight("weightGrams", "Weight (g)", true));
+
+    /**
+     * The shop's stock sheet: how many pieces sit in each weight band.
+     *
+     * <p>Counted on what is left of a piece rather than what it weighed when
+     * it came in, so a bulk box half sold is banded by the half still on the
+     * shelf. The bands are contiguous, which is what lets the ordering below
+     * sort them by their own smallest weight - alphabetically "10 - 20 g"
+     * would come before "2 - 5 g".
+     */
+    private static final String STOCK_SUMMARY_SQL = """
+            SELECT it.name, c.name, COALESCE(sc.name, 'Unspecified'),
+                   CASE
+                     WHEN i.remaining_weight_grams <  1 THEN 'Below 1 g'
+                     WHEN i.remaining_weight_grams <  2 THEN '1 - 2 g'
+                     WHEN i.remaining_weight_grams <  5 THEN '2 - 5 g'
+                     WHEN i.remaining_weight_grams < 10 THEN '5 - 10 g'
+                     WHEN i.remaining_weight_grams < 20 THEN '10 - 20 g'
+                     ELSE '20 g and above'
+                   END,
+                   COUNT(*), SUM(i.remaining_weight_grams)
+            FROM inventory_items i
+            JOIN item_types it ON it.id = i.item_type_id
+            JOIN categories c ON c.id = i.category_id
+            LEFT JOIN sub_categories sc ON sc.id = i.sub_category_id
+            WHERE i.active = TRUE AND i.status = 'AVAILABLE'
+            """;
+
+    private static final String STOCK_SUMMARY_TAIL = """
+             GROUP BY it.name, c.name, COALESCE(sc.name, 'Unspecified'),
+                      CASE
+                        WHEN i.remaining_weight_grams <  1 THEN 'Below 1 g'
+                        WHEN i.remaining_weight_grams <  2 THEN '1 - 2 g'
+                        WHEN i.remaining_weight_grams <  5 THEN '2 - 5 g'
+                        WHEN i.remaining_weight_grams < 10 THEN '5 - 10 g'
+                        WHEN i.remaining_weight_grams < 20 THEN '10 - 20 g'
+                        ELSE '20 g and above'
+                      END
+             ORDER BY it.name, c.name, COALESCE(sc.name, 'Unspecified'),
+                      MIN(i.remaining_weight_grams)
+            """;
+
     private static final String STOCK_SQL = """
             SELECT i.serial_number, i.created_at, it.name, p.name, c.name, sc.name, h.hsn_code, h.gst_percentage,
                    i.size, i.weight_grams, CASE WHEN i.bulk THEN 'Yes' ELSE 'No' END,
@@ -195,6 +244,36 @@ public class ReportDefinitions {
 
         return new ReportDefinition("Stock Report", "stock-report", filter.startDate(), filter.endDate(),
                 descriptions, List.of(new ReportDefinition.Sheet("Stock", STOCK_COLUMNS, sql.toString(), params)));
+    }
+
+    public ReportDefinition stockSummary(
+            StockSummaryFilter filter, Map<String, String> labels, java.time.LocalDate asAt) {
+        Map<String, Object> params = new HashMap<>();
+        StringBuilder sql = new StringBuilder(STOCK_SUMMARY_SQL);
+        List<String> descriptions = new ArrayList<>();
+        descriptions.add("Pieces on the shelf, by weight");
+        if (filter.itemTypeId() != null) {
+            sql.append(" AND i.item_type_id = :itemTypeId");
+            params.put("itemTypeId", filter.itemTypeId());
+            descriptions.add("Item type: " + labels.get("itemType"));
+        }
+        if (filter.categoryId() != null) {
+            sql.append(" AND i.category_id = :categoryId");
+            params.put("categoryId", filter.categoryId());
+            descriptions.add("Category: " + labels.get("category"));
+        }
+        if (filter.subCategoryId() != null) {
+            sql.append(" AND i.sub_category_id = :subCategoryId");
+            params.put("subCategoryId", filter.subCategoryId());
+            descriptions.add("Sub category: " + labels.get("subCategory"));
+        }
+        sql.append(STOCK_SUMMARY_TAIL);
+
+        // The period reads as the one day it is true of: a stock sheet is a
+        // photograph of the shelf, not a record of a stretch of time.
+        return new ReportDefinition("Stock Sheet", "stock-sheet", asAt, asAt,
+                descriptions,
+                List.of(new ReportDefinition.Sheet("Stock Sheet", STOCK_SUMMARY_COLUMNS, sql.toString(), params)));
     }
 
     public ReportDefinition sales(SalesReportFilter filter, Map<String, String> labels) {
