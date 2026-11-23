@@ -59,7 +59,9 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
             <th class="left">Particulars</th>
             <th>HSN</th>
             <th>Net Wt</th>
-            <th>Wastage</th>
+            <!-- No wastage column: the shop does not put its wastage on the
+                 customer's bill. It is still entered line by line and is still
+                 in the gross weight, which is what the amount is charged on. -->
             <th>Gross Wt</th>
             <th>Rate</th>
             <th>Making</th>
@@ -82,7 +84,6 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
               </td>
               <td class="center">{{ line.hsnCode }}</td>
               <td>{{ line.netWeightGrams.toFixed(3) }}</td>
-              <td>{{ line.wastagePercentage }}%<div class="sub">{{ line.wastageWeightGrams.toFixed(3) }}</div></td>
               <td>{{ line.grossWeightGrams.toFixed(3) }}</td>
               <td>{{ line.ratePerGram | inr: 'whole' }}</td>
               <td>{{ line.makingCharge | inr: 'whole' }}</td>
@@ -91,19 +92,19 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
           }
         </tbody>
         <tfoot>
-          <tr><td colspan="8" class="right">TOTAL</td><td class="strong">{{ s.totals.subtotal | inr: 'whole' }}</td></tr>
-          <tr><td colspan="8" class="right">Add: CGST {{ halfRate() }}</td><td>{{ s.totals.cgstAmount | inr }}</td></tr>
-          <tr><td colspan="8" class="right">Add: SGST {{ halfRate() }}</td><td>{{ s.totals.sgstAmount | inr }}</td></tr>
+          <tr><td colspan="7" class="right">TOTAL</td><td class="strong">{{ s.totals.subtotal | inr: 'whole' }}</td></tr>
+          <tr><td colspan="7" class="right">Add: CGST {{ halfRate() }}</td><td>{{ s.totals.cgstAmount | inr }}</td></tr>
+          <tr><td colspan="7" class="right">Add: SGST {{ halfRate() }}</td><td>{{ s.totals.sgstAmount | inr }}</td></tr>
           @if (s.totals.discountAmount > 0) {
-            <tr><td colspan="8" class="right">Discount</td><td>- {{ s.totals.discountAmount | inr }}</td></tr>
+            <tr><td colspan="7" class="right">Discount</td><td>- {{ s.totals.discountAmount | inr }}</td></tr>
           }
-          <tr class="grand"><td colspan="8" class="right">GRAND TOTAL</td><td>{{ s.totals.grandTotal | inr }}</td></tr>
+          <tr class="grand"><td colspan="7" class="right">GRAND TOTAL</td><td>{{ s.totals.grandTotal | inr }}</td></tr>
           @for (adjustment of activeAdjustments(); track adjustment.id) {
-            <tr><td colspan="8" class="right">Less: Old gold / silver ({{ adjustment.transactionNumber }})</td><td>- {{ adjustment.adjustmentAmount | inr }}</td></tr>
+            <tr><td colspan="7" class="right">Less: Old gold / silver ({{ adjustment.transactionNumber }})</td><td>- {{ adjustment.adjustmentAmount | inr }}</td></tr>
           }
           @for (chit of activeChits(); track chit.id) {
             <tr>
-              <td colspan="8" class="right">
+              <td colspan="7" class="right">
                 Less: Savings Scheme ({{ chit.chitNumber }})@if (chit.grams) {
                   &nbsp;{{ chit.grams | weight }} at {{ chit.ratePerGram | inr: 'whole' }}
                 }
@@ -112,11 +113,11 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
             </tr>
           }
           @if (s.totals.roundOffAmount !== 0) {
-            <tr><td colspan="8" class="right">Round off</td><td>{{ s.totals.roundOffAmount | inr }}</td></tr>
+            <tr><td colspan="7" class="right">Round off</td><td>{{ s.totals.roundOffAmount | inr }}</td></tr>
           }
           @if (s.totals.oldMetalAdjustmentAmount > 0 || s.totals.chitAdjustmentAmount > 0
                || s.totals.roundOffAmount !== 0) {
-            <tr class="grand"><td colspan="8" class="right">NET PAYABLE</td><td>{{ s.totals.netPayable | inr }}</td></tr>
+            <tr class="grand"><td colspan="7" class="right">NET PAYABLE</td><td>{{ s.totals.netPayable | inr }}</td></tr>
           }
         </tfoot>
       </table>
@@ -161,6 +162,13 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
         display: flex; flex-direction: column;
         background: #fff; color: #1a1a1a; border: 1px solid #d8cfc0;
         font-size: 12.5px; line-height: 1.45;
+        /*
+         * The whole bill is set bold. The shop's printer lays down a thin,
+         * grey-looking 400, and a tax invoice is kept for years and read
+         * across a counter; everything that was already heavier than the body
+         * is stepped up to stay ahead of it.
+         */
+        font-weight: 600;
       }
       .invoice__void {
         position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-20deg);
@@ -178,18 +186,18 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
       .invoice__shop { margin: 0; font-size: 25px; color: #7a1f2b; letter-spacing: 0.04em; text-transform: uppercase; }
       /* On its own line: a GSTIN is 15 characters and crowds the phone number
          when the two share one. */
-      .gstin { display: block; margin-top: 2px; font-weight: 600; letter-spacing: 0.03em; }
-      .invoice__title { text-align: center; margin: 7mm auto; font-weight: 700; letter-spacing: 0.2em; background: #7a1f2b; color: #fff; width: fit-content; padding: 4px 18px; border-radius: 3px; }
+      .gstin { display: block; margin-top: 2px; font-weight: 700; letter-spacing: 0.03em; }
+      .invoice__title { text-align: center; margin: 7mm auto; font-weight: 800; letter-spacing: 0.2em; background: #7a1f2b; color: #fff; width: fit-content; padding: 4px 18px; border-radius: 3px; }
       .invoice__meta { display: flex; justify-content: space-between; gap: 16px; margin: 0 0 7mm; }
       .invoice__number { text-align: right; white-space: nowrap; }
       .label { color: #6b5f50; }
       .invoice__lines { width: 100%; border-collapse: collapse; }
       .invoice__lines th, .invoice__lines td { border: 1px solid #bfb3a0; padding: 2.2mm 2mm; text-align: right; font-variant-numeric: tabular-nums; vertical-align: top; }
-      .invoice__lines th { background: #f3ece0; text-align: center; font-weight: 600; }
+      .invoice__lines th { background: #f3ece0; text-align: center; font-weight: 700; }
       .invoice__lines .left { text-align: left; }
       .invoice__lines .center { text-align: center; }
       .invoice__lines .right { text-align: right; }
-      .invoice__lines .strong { font-weight: 600; }
+      .invoice__lines .strong { font-weight: 700; }
       .invoice__lines .sub { font-size: 10px; color: #6b5f50; }
       .invoice__lines tfoot td { border-top: 0; }
       .invoice__lines tr.grand td { font-weight: 800; font-size: 13px; background: #f3ece0; }
@@ -198,7 +206,7 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
       .invoice__words:first-of-type { margin-top: 7mm; }
       /* Never shrinks below nothing, so a long invoice still pages properly. */
       .invoice__fill { flex: 1 1 auto; min-height: 22mm; }
-      .invoice__sign { display: flex; justify-content: flex-end; font-weight: 600; }
+      .invoice__sign { display: flex; justify-content: flex-end; font-weight: 700; }
       /* Room to actually sign above the line. */
       .invoice__sign > div { border-top: 1px solid #bfb3a0; padding-top: 4px; min-width: 55mm; text-align: center; }
       /*
