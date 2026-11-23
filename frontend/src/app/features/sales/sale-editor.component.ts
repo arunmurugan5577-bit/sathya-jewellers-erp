@@ -58,13 +58,14 @@ interface Row {
   /** The BIS hallmark stamped on the piece, where it carries one. */
   huid: string;
   /**
-   * A piece the shop never tagged - the small gold it sells without a serial.
+   * What a tag would have said, where there is no tag.
    *
-   * <p>Everything a scan would have read off the piece is chosen by hand
-   * instead, so the row carries its own masters and its own lookups: purity
-   * depends on the item type, and sub category on the category.
+   * <p>A row with no serial number is described by hand - the small gold the
+   * shop sells untagged - so it carries its own masters and its own lookups:
+   * purity depends on the item type, and sub category on the category.
+   * Whether a row is that kind follows from what has been typed into it; see
+   * {@link SaleEditorComponent.loose}.
    */
-  loose: boolean;
   itemTypeId: string;
   purityId: string;
   categoryId: string;
@@ -120,7 +121,8 @@ function toNumber(value: string): number | null {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="stack">
-      <app-page-header title="New sale" subtitle="Enter each piece's serial number - its details load automatically.">
+      <app-page-header title="New sale"
+                       subtitle="Scan or type a serial number and the piece loads itself. No tag? Leave it blank and type the piece in.">
         <a class="btn btn--ghost" routerLink="/sales">All invoices</a>
       </app-page-header>
 
@@ -151,10 +153,8 @@ function toNumber(value: string): number | null {
                 <button type="button" class="mode__btn" [class.mode__btn--on]="entryMode() === 'MANUAL'"
                         [attr.aria-pressed]="entryMode() === 'MANUAL'" (click)="setMode('MANUAL')">Manual entry</button>
               </div>
-              <button type="button" class="btn btn--sm" (click)="addLooseRow()">+ Item without serial</button>
-              @if (entryMode() === 'MANUAL') {
-                <button type="button" class="btn btn--sm" (click)="addRow()">+ Add item</button>
-              }
+              <!-- Scanning still needs this: a piece with no tag to scan is typed in. -->
+              <button type="button" class="btn btn--sm" (click)="addRow()">+ Add item</button>
             </div>
 
             @if (entryMode() === 'SCAN') {
@@ -178,47 +178,37 @@ function toNumber(value: string): number | null {
             }
             <div class="lines">
               @if (!rows().length) {
-                <p class="lines__empty">No pieces yet. Scan the tag on the first item.</p>
+                <p class="lines__empty">No pieces yet. Scan the tag on the first item, or add one that has no tag.</p>
               }
               @for (row of rows(); track row.key; let i = $index) {
                 <div class="line" [class.line--error]="row.lookupError">
                   <div class="line__head">
                     <span class="line__no">{{ i + 1 }}</span>
-                    @if (!row.loose) {
-                      <div class="field serial-field">
-                        <label class="field__label field__label--required" [for]="'serial' + row.key">Serial no</label>
-                        <input #serialInput class="input serial" [id]="'serial' + row.key" inputmode="numeric" maxlength="6"
-                               placeholder="000123" autocomplete="off" [value]="row.serial"
-                               [readonly]="entryMode() === 'SCAN'"
-                               (input)="setSerial(i, $any($event.target).value)"
-                               (keydown)="onSerialKey($event, i)"
-                               (blur)="lookup(i)" />
-                      </div>
-                    } @else {
-                      <div class="field particulars-field">
-                        <label class="field__label field__label--required" [for]="'part' + row.key">Particulars</label>
-                        <input class="input" [id]="'part' + row.key" maxlength="200" placeholder="Mookuthi"
-                               autocomplete="off" [value]="row.particulars"
-                               (input)="patch(i, { particulars: $any($event.target).value })" />
-                      </div>
-                    }
+                    <div class="field serial-field">
+                      <label class="field__label" [for]="'serial' + row.key">Serial no</label>
+                      <input #serialInput class="input serial" [id]="'serial' + row.key" inputmode="numeric" maxlength="6"
+                             placeholder="000123" autocomplete="off" [value]="row.serial"
+                             [readonly]="entryMode() === 'SCAN'"
+                             (input)="setSerial(i, $any($event.target).value)"
+                             (keydown)="onSerialKey($event, i)"
+                             (blur)="lookup(i)" />
+                    </div>
                     <div class="field huid-field">
                       <label class="field__label" [for]="'huid' + row.key">HUID</label>
                       <input class="input" [id]="'huid' + row.key" maxlength="6" placeholder="AZ1234"
                              autocomplete="off" [value]="row.huid"
                              (input)="patch(i, { huid: $any($event.target).value.toUpperCase() })" />
                     </div>
-                    @if (row.lookup; as item) {
-                      <div class="field particulars-field">
-                        <label class="field__label" [for]="'part' + row.key">Particulars</label>
-                        <input class="input" [id]="'part' + row.key" maxlength="200" [value]="row.particulars"
-                               (input)="patch(i, { particulars: $any($event.target).value })" />
-                      </div>
-                    }
+                    <div class="field particulars-field">
+                      <label class="field__label" [class.field__label--required]="loose(row)" [for]="'part' + row.key">Particulars</label>
+                      <input class="input" [id]="'part' + row.key" maxlength="200" autocomplete="off"
+                             [placeholder]="row.lookup ? '' : 'Mookuthi'" [value]="row.particulars"
+                             (input)="patch(i, { particulars: $any($event.target).value })" />
+                    </div>
                     <button type="button" class="btn btn--ghost btn--icon line__remove" aria-label="Remove item" (click)="removeRow(i)">&times;</button>
                   </div>
 
-                  @if (row.loose) {
+                  @if (loose(row)) {
                     <div class="facts facts--loose">
                       <div class="field">
                         <label class="field__label field__label--required" [for]="'type' + row.key">Item type</label>
@@ -270,7 +260,7 @@ function toNumber(value: string): number | null {
                     </div>
                   }
 
-                  @if (row.loose) {
+                  @if (loose(row)) {
                     <div class="inputs">
                       <div class="field">
                         <label class="field__label field__label--required" [for]="'lg' + row.key">Weight (g)</label>
@@ -700,13 +690,12 @@ export class SaleEditorComponent {
       !!this.calculation() &&
       !this.calcError() &&
       this.readyRows().length > 0 &&
-      this.readyRows().length
-        === this.rows().filter((row) => row.loose || row.serial.trim() !== '').length,
+      this.readyRows().length === this.rows().filter((row) => !this.blank(row)).length,
   );
 
   private readonly readyRows = computed(() =>
     this.rows().filter(
-      (row) => (row.loose ? this.looseSettled(row) : !!row.lookup)
+      (row) => (this.loose(row) ? this.looseSettled(row) : !!row.lookup)
         && (toNumber(row.rate) ?? 0) > 0
         && this.weightSettled(row),
     ),
@@ -739,7 +728,7 @@ export class SaleEditorComponent {
   private weightSettled(row: Row): boolean {
     // A loose piece weighs whatever the counter put on the scale, and there
     // is no box to run out of.
-    if (row.loose) {
+    if (this.loose(row)) {
       return (toNumber(row.weight) ?? 0) > 0;
     }
     if (!row.lookup?.bulk) {
@@ -977,26 +966,41 @@ export class SaleEditorComponent {
     row.wastage = last?.wastage ?? '';
     this.rows.update((rows) => [...rows, row]);
     if (focus) {
-      setTimeout(() => this.serialInputs().at(-1)?.nativeElement.focus());
+      // While scanning, the serial box is the scanner's to fill: a row added
+      // by hand is one with no tag, so the cursor goes where the typing is.
+      setTimeout(() =>
+        (this.entryMode() === 'SCAN'
+          ? document.getElementById('huid' + row.key)
+          : this.serialInputs().at(-1)?.nativeElement
+        )?.focus(),
+      );
     }
   }
 
   /**
-   * A row for a piece the shop never tagged.
+   * Whether this row is a piece the shop never tagged.
    *
-   * <p>The small gold - a mookuthi, a thin ring - is sold without a serial, so
-   * there is nothing to scan and everything the tag would have said is typed
-   * instead. Scanning stays on: the next tag still lands in its own row.
+   * <p>No mode and no button decides it: the serial number does. The small
+   * gold - a mookuthi, a thin ring - has no tag to scan, so the counter
+   * leaves the serial blank and types the hallmark or the description
+   * instead, and the rest of the piece is then asked for by hand.
+   *
+   * <p>An untouched row is neither kind yet - it is the empty line waiting at
+   * the bottom of the list - so it asks for nothing and holds nothing up.
    */
-  protected addLooseRow(): void {
-    this.loadLooseMasters();
-    const last = this.rows().at(-1);
-    const row = this.emptyRow();
-    row.loose = true;
-    row.rate = last?.rate ?? '';
-    row.wastage = last?.wastage ?? '';
-    this.rows.update((rows) => [...rows, row]);
-    setTimeout(() => document.getElementById('part' + row.key)?.focus());
+  protected loose(row: Row): boolean {
+    return !this.blank(row) && row.serial.trim() === '';
+  }
+
+  /** Nothing typed into it at all. */
+  private blank(row: Row): boolean {
+    return row.serial.trim() === ''
+        && row.huid.trim() === ''
+        && row.particulars.trim() === ''
+        && !row.itemTypeId
+        && !row.categoryId
+        && !row.hsnId
+        && !row.purityId;
   }
 
   private loadLooseMasters(): void {
@@ -1053,14 +1057,30 @@ export class SaleEditorComponent {
 
   protected patch(index: number, changes: Partial<Row>): void {
     this.rows.update((rows) => rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
+    // The first row to go without a serial brings in the masters it will be
+    // described from. A bill of nothing but scanned tags never asks for them.
+    if (this.loose(this.rows()[index])) {
+      this.loadLooseMasters();
+    }
     this.schedule();
   }
 
   protected setSerial(index: number, value: string): void {
     const row = this.rows()[index];
     const digits = value.replace(/\D/g, '');
+    // A serial says everything the hand-typed fields were asking, so they go
+    // with it: a line is one kind or the other, and the server refuses a line
+    // that tries to be both.
+    const handTyped: Partial<Row> = digits
+      ? { itemTypeId: '', purityId: '', categoryId: '', subCategoryId: '', hsnId: '', purities: [], subCategories: [] }
+      : {};
     // Editing the serial invalidates what was loaded for the old one.
-    this.patch(index, { serial: digits, lookup: row.lookup && row.lookup.serialNumber === digits.padStart(3, '0') ? row.lookup : null, lookupError: null });
+    this.patch(index, {
+      serial: digits,
+      lookup: row.lookup && row.lookup.serialNumber === digits.padStart(3, '0') ? row.lookup : null,
+      lookupError: null,
+      ...handTyped,
+    });
   }
 
   /** Enter (or a barcode scanner's trailing Enter) looks the piece up straight away. */
@@ -1215,18 +1235,18 @@ export class SaleEditorComponent {
         // would have said. A tagged piece sends the serial and nothing else:
         // the server reads the rest off the stock record and refuses masters
         // it did not ask for.
-        serialNumber: row.loose ? null : row.lookup!.serialNumber,
+        serialNumber: this.loose(row) ? null : row.lookup!.serialNumber,
         huid: row.huid.trim().toUpperCase() || null,
-        itemTypeId: row.loose ? Number(row.itemTypeId) : null,
-        purityId: row.loose ? Number(row.purityId) : null,
-        categoryId: row.loose ? Number(row.categoryId) : null,
-        subCategoryId: row.loose && row.subCategoryId ? Number(row.subCategoryId) : null,
-        hsnId: row.loose ? Number(row.hsnId) : null,
+        itemTypeId: this.loose(row) ? Number(row.itemTypeId) : null,
+        purityId: this.loose(row) ? Number(row.purityId) : null,
+        categoryId: this.loose(row) ? Number(row.categoryId) : null,
+        subCategoryId: this.loose(row) && row.subCategoryId ? Number(row.subCategoryId) : null,
+        hsnId: this.loose(row) ? Number(row.hsnId) : null,
         particulars: row.particulars.trim() || null,
         // Sent for a box and for a loose piece - both are weighed at the
         // counter. A single tagged piece is sold whole and the server refuses
         // a weight for it rather than quietly ignoring one.
-        weightGrams: row.loose || row.lookup!.bulk ? toNumber(row.weight) : null,
+        weightGrams: this.loose(row) || row.lookup!.bulk ? toNumber(row.weight) : null,
         wastagePercentage: toNumber(row.wastage),
         ratePerGram: toNumber(row.rate),
         makingCharge: toNumber(row.making),
@@ -1267,7 +1287,6 @@ export class SaleEditorComponent {
       rate: '',
       making: '',
       huid: '',
-      loose: false,
       itemTypeId: '',
       purityId: '',
       categoryId: '',
