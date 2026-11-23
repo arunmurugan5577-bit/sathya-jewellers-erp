@@ -170,8 +170,12 @@ export interface SaleItemLookup {
 
 export interface SaleLine {
   lineNumber: number;
-  inventoryItemId: number;
-  serialNumber: string;
+  /** Null for a loose piece that was never in stock. */
+  inventoryItemId?: number | null;
+  /** Null for a loose piece. */
+  serialNumber?: string | null;
+  /** The BIS hallmark, where the piece carries one. */
+  huid?: string | null;
   particulars: string;
   itemTypeName: string;
   purityName: string;
@@ -305,9 +309,24 @@ export interface SaleSummary {
 }
 
 export interface SaleItemRequest {
-  serialNumber: string;
+  /**
+   * The tag's serial, or null for a loose piece the shop never tagged.
+   *
+   * <p>A line is one or the other: with a serial the server reads the piece
+   * off its stock record and refuses hand-typed masters; without one it
+   * requires them, and takes nothing out of stock.
+   */
+  serialNumber?: string | null;
+  /** The BIS hallmark stamped on the piece, where it carries one. */
+  huid?: string | null;
+  /** Loose pieces only - what a tag would have said. */
+  itemTypeId?: number | null;
+  purityId?: number | null;
+  categoryId?: number | null;
+  subCategoryId?: number | null;
+  hsnId?: number | null;
   particulars?: string | null;
-  /** Only for a bulk box: the weight being sold out of it. */
+  /** For a bulk box or a loose piece: the weight on the scale. */
   weightGrams?: number | null;
   wastagePercentage?: number | null;
   ratePerGram: number | null;

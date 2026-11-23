@@ -29,6 +29,12 @@ import {
   SaleLine,
   SaleRequest,
 } from '../../shared/models/sales.model';
+import { Lookup } from '../../shared/models/lookup.model';
+import { CategoryService } from '../masters/category/category.service';
+import { HsnService } from '../masters/hsn/hsn.service';
+import { ItemTypeService } from '../masters/item-type/item-type.service';
+import { PurityService } from '../masters/purity/purity.service';
+import { SubCategoryService } from '../masters/sub-category/sub-category.service';
 import { InrPipe } from '../../shared/pipes/inr.pipe';
 import { WeightPipe } from '../../shared/pipes/weight.pipe';
 import { ChitSummary } from '../../shared/models/chit.model';
@@ -49,6 +55,23 @@ interface Row {
   wastage: string;
   rate: string;
   making: string;
+  /** The BIS hallmark stamped on the piece, where it carries one. */
+  huid: string;
+  /**
+   * A piece the shop never tagged - the small gold it sells without a serial.
+   *
+   * <p>Everything a scan would have read off the piece is chosen by hand
+   * instead, so the row carries its own masters and its own lookups: purity
+   * depends on the item type, and sub category on the category.
+   */
+  loose: boolean;
+  itemTypeId: string;
+  purityId: string;
+  categoryId: string;
+  subCategoryId: string;
+  hsnId: string;
+  purities: Lookup[];
+  subCategories: Lookup[];
 }
 
 interface PaymentRow {
@@ -128,6 +151,7 @@ function toNumber(value: string): number | null {
                 <button type="button" class="mode__btn" [class.mode__btn--on]="entryMode() === 'MANUAL'"
                         [attr.aria-pressed]="entryMode() === 'MANUAL'" (click)="setMode('MANUAL')">Manual entry</button>
               </div>
+              <button type="button" class="btn btn--sm" (click)="addLooseRow()">+ Item without serial</button>
               @if (entryMode() === 'MANUAL') {
                 <button type="button" class="btn btn--sm" (click)="addRow()">+ Add item</button>
               }
@@ -160,14 +184,29 @@ function toNumber(value: string): number | null {
                 <div class="line" [class.line--error]="row.lookupError">
                   <div class="line__head">
                     <span class="line__no">{{ i + 1 }}</span>
-                    <div class="field serial-field">
-                      <label class="field__label field__label--required" [for]="'serial' + row.key">Serial no</label>
-                      <input #serialInput class="input serial" [id]="'serial' + row.key" inputmode="numeric" maxlength="6"
-                             placeholder="000123" autocomplete="off" [value]="row.serial"
-                             [readonly]="entryMode() === 'SCAN'"
-                             (input)="setSerial(i, $any($event.target).value)"
-                             (keydown)="onSerialKey($event, i)"
-                             (blur)="lookup(i)" />
+                    @if (!row.loose) {
+                      <div class="field serial-field">
+                        <label class="field__label field__label--required" [for]="'serial' + row.key">Serial no</label>
+                        <input #serialInput class="input serial" [id]="'serial' + row.key" inputmode="numeric" maxlength="6"
+                               placeholder="000123" autocomplete="off" [value]="row.serial"
+                               [readonly]="entryMode() === 'SCAN'"
+                               (input)="setSerial(i, $any($event.target).value)"
+                               (keydown)="onSerialKey($event, i)"
+                               (blur)="lookup(i)" />
+                      </div>
+                    } @else {
+                      <div class="field particulars-field">
+                        <label class="field__label field__label--required" [for]="'part' + row.key">Particulars</label>
+                        <input class="input" [id]="'part' + row.key" maxlength="200" placeholder="Mookuthi"
+                               autocomplete="off" [value]="row.particulars"
+                               (input)="patch(i, { particulars: $any($event.target).value })" />
+                      </div>
+                    }
+                    <div class="field huid-field">
+                      <label class="field__label" [for]="'huid' + row.key">HUID</label>
+                      <input class="input" [id]="'huid' + row.key" maxlength="6" placeholder="AZ1234"
+                             autocomplete="off" [value]="row.huid"
+                             (input)="patch(i, { huid: $any($event.target).value.toUpperCase() })" />
                     </div>
                     @if (row.lookup; as item) {
                       <div class="field particulars-field">
@@ -178,6 +217,88 @@ function toNumber(value: string): number | null {
                     }
                     <button type="button" class="btn btn--ghost btn--icon line__remove" aria-label="Remove item" (click)="removeRow(i)">&times;</button>
                   </div>
+
+                  @if (row.loose) {
+                    <div class="facts facts--loose">
+                      <div class="field">
+                        <label class="field__label field__label--required" [for]="'type' + row.key">Item type</label>
+                        <select class="select" [id]="'type' + row.key" (change)="setLooseType(i, $any($event.target).value)">
+                          <option value="">Choose</option>
+                          @for (type of itemTypes(); track type.id) {
+                            <option [value]="type.id" [selected]="row.itemTypeId === String(type.id)">{{ type.name }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label class="field__label field__label--required" [for]="'purity' + row.key">Purity</label>
+                        <select class="select" [id]="'purity' + row.key" [disabled]="!row.itemTypeId"
+                                (change)="patch(i, { purityId: $any($event.target).value })">
+                          <option value="">{{ row.itemTypeId ? 'Choose' : 'Item type first' }}</option>
+                          @for (purity of row.purities; track purity.id) {
+                            <option [value]="purity.id" [selected]="row.purityId === String(purity.id)">{{ purity.name }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label class="field__label field__label--required" [for]="'cat' + row.key">Category</label>
+                        <select class="select" [id]="'cat' + row.key" (change)="setLooseCategory(i, $any($event.target).value)">
+                          <option value="">Choose</option>
+                          @for (category of categories(); track category.id) {
+                            <option [value]="category.id" [selected]="row.categoryId === String(category.id)">{{ category.name }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label class="field__label" [for]="'sub' + row.key">Sub category</label>
+                        <select class="select" [id]="'sub' + row.key" [disabled]="!row.categoryId"
+                                (change)="patch(i, { subCategoryId: $any($event.target).value })">
+                          <option value="">{{ row.categoryId ? 'None' : 'Category first' }}</option>
+                          @for (sub of row.subCategories; track sub.id) {
+                            <option [value]="sub.id" [selected]="row.subCategoryId === String(sub.id)">{{ sub.name }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label class="field__label field__label--required" [for]="'hsn' + row.key">HSN</label>
+                        <select class="select" [id]="'hsn' + row.key" (change)="patch(i, { hsnId: $any($event.target).value })">
+                          <option value="">Choose</option>
+                          @for (hsn of hsnCodes(); track hsn.id) {
+                            <option [value]="hsn.id" [selected]="row.hsnId === String(hsn.id)">{{ hsn.name }}</option>
+                          }
+                        </select>
+                      </div>
+                    </div>
+                  }
+
+                  @if (row.loose) {
+                    <div class="inputs">
+                      <div class="field">
+                        <label class="field__label field__label--required" [for]="'lg' + row.key">Weight (g)</label>
+                        <input class="input numeric" [id]="'lg' + row.key" type="number" min="0.001" step="0.001"
+                               [value]="row.weight" (input)="patch(i, { weight: $any($event.target).value })" />
+                      </div>
+                      <div class="field">
+                        <label class="field__label" [for]="'lw' + row.key">Wastage %</label>
+                        <input class="input numeric" [id]="'lw' + row.key" type="number" min="0" max="100" step="0.01"
+                               [value]="row.wastage" (input)="patch(i, { wastage: $any($event.target).value })" />
+                      </div>
+                      <div class="field">
+                        <label class="field__label field__label--required" [for]="'lr' + row.key">Rate / g</label>
+                        <input class="input numeric" [id]="'lr' + row.key" type="number" min="0" step="0.01"
+                               [value]="row.rate" (input)="patch(i, { rate: $any($event.target).value })" />
+                      </div>
+                      <div class="field">
+                        <label class="field__label" [for]="'lm' + row.key">Making charge</label>
+                        <input class="input numeric" [id]="'lm' + row.key" type="number" min="0" step="0.01"
+                               [value]="row.making" (input)="patch(i, { making: $any($event.target).value })" />
+                      </div>
+                      @if (pricedRow(row); as line) {
+                        <div class="figure-cell"><span class="field__label">Wastage wt</span>{{ line.wastageWeightGrams | weight }}</div>
+                        <div class="figure-cell"><span class="field__label">Gross wt</span>{{ line.grossWeightGrams | weight }}</div>
+                        <div class="figure-cell figure-cell--amount"><span class="field__label">Amount</span>{{ line.amount | inr: 'whole' }}</div>
+                      }
+                    </div>
+                  }
 
                   @if (row.looking) {
                     <p class="text-muted">Looking up serial {{ row.serial }}...</p>
@@ -465,6 +586,14 @@ function toNumber(value: string): number | null {
       .line__no { font-weight: 600; color: var(--text-muted); padding-bottom: var(--space-2); min-width: 1.5rem; }
       .line__remove { margin-left: auto; }
       .serial-field { width: 8rem; }
+      .particulars-field { width: 14rem; }
+      .huid-field { width: 7.5rem; }
+      .facts--loose {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+        gap: 0.5rem 0.75rem;
+        align-items: end;
+      }
       .serial { font-family: var(--font-mono); letter-spacing: 0.08em; }
       .particulars-field { flex: 1; min-width: 12rem; }
       .facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); font-size: var(--text-sm); color: var(--text-secondary); }
@@ -493,6 +622,11 @@ export class SaleEditorComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly chitApi = inject(ChitApiService);
+  private readonly itemTypeService = inject(ItemTypeService);
+  private readonly purityService = inject(PurityService);
+  private readonly categoryService = inject(CategoryService);
+  private readonly subCategoryService = inject(SubCategoryService);
+  private readonly hsnService = inject(HsnService);
   /** A scheme to tick as soon as its customer's schemes arrive. */
   private preselectedChit: number | null = null;
   private readonly serialInputs = viewChildren<ElementRef<HTMLInputElement>>('serialInput');
@@ -516,6 +650,18 @@ export class SaleEditorComponent {
   /** Scheme id -> what to take off it, for the schemes ticked. */
   protected readonly chits = signal<Record<number, { amount: string; grams: string; rate: string }>>({});
 
+  /**
+   * The masters a loose row chooses from.
+   *
+   * <p>Loaded the first time one is added, not on every sale: a bill made
+   * entirely of scanned tags has no use for them.
+   */
+  protected readonly itemTypes = signal<Lookup[]>([]);
+  protected readonly categories = signal<Lookup[]>([]);
+  protected readonly hsnCodes = signal<Lookup[]>([]);
+  /** The template compares a row's chosen id, a string, against a number. */
+  protected readonly String = String;
+
   protected readonly calculation = signal<SaleCalculation | null>(null);
   protected readonly calculating = signal(false);
   protected readonly calcError = signal<string | null>(null);
@@ -537,7 +683,11 @@ export class SaleEditorComponent {
   private readonly pricedBySerial = computed(() => {
     const map = new Map<string, SaleLine>();
     for (const line of this.calculation()?.lines ?? []) {
-      map.set(line.serialNumber, line);
+      // A loose line has no serial; its row finds its figures by position
+      // instead. See {@link pricedRow}.
+      if (line.serialNumber) {
+        map.set(line.serialNumber, line);
+      }
     }
     return map;
   });
@@ -550,14 +700,33 @@ export class SaleEditorComponent {
       !!this.calculation() &&
       !this.calcError() &&
       this.readyRows().length > 0 &&
-      this.readyRows().length === this.rows().filter((row) => row.serial.trim() !== '').length,
+      this.readyRows().length
+        === this.rows().filter((row) => row.loose || row.serial.trim() !== '').length,
   );
 
   private readonly readyRows = computed(() =>
     this.rows().filter(
-      (row) => row.lookup && (toNumber(row.rate) ?? 0) > 0 && this.weightSettled(row),
+      (row) => (row.loose ? this.looseSettled(row) : !!row.lookup)
+        && (toNumber(row.rate) ?? 0) > 0
+        && this.weightSettled(row),
     ),
   );
+
+  /**
+   * Whether a loose row has said what it is.
+   *
+   * <p>Everything a scan would have supplied: a description, what it is made
+   * of, its purity, its category and the HSN code it is taxed under. The
+   * server asks for the same five and says so, but a Save button that goes
+   * dead rather than bouncing is the kinder way round.
+   */
+  private looseSettled(row: Row): boolean {
+    return row.particulars.trim() !== ''
+        && !!row.itemTypeId
+        && !!row.purityId
+        && !!row.categoryId
+        && !!row.hsnId;
+  }
 
   /**
    * Whether a row's weight is known.
@@ -568,6 +737,11 @@ export class SaleEditorComponent {
    * server, so the invoice is not sent only to bounce.
    */
   private weightSettled(row: Row): boolean {
+    // A loose piece weighs whatever the counter put on the scale, and there
+    // is no box to run out of.
+    if (row.loose) {
+      return (toNumber(row.weight) ?? 0) > 0;
+    }
     if (!row.lookup?.bulk) {
       return true;
     }
@@ -654,6 +828,19 @@ export class SaleEditorComponent {
 
   protected priced(serial: string): SaleLine | undefined {
     return this.pricedBySerial().get(serial.trim().padStart(3, '0'));
+  }
+
+  /**
+   * The server's figures for one row.
+   *
+   * <p>A loose row has no serial to look itself up by, so the rows that were
+   * sent are zipped with the lines that came back - they are in the same
+   * order, because the request was built from the same list.
+   */
+  protected pricedRow(row: Row): SaleLine | undefined {
+    const sent = this.readyRows();
+    const index = sent.findIndex((candidate) => candidate.key === row.key);
+    return index < 0 ? undefined : this.calculation()?.lines?.[index];
   }
 
   protected schedule(): void {
@@ -792,6 +979,64 @@ export class SaleEditorComponent {
     if (focus) {
       setTimeout(() => this.serialInputs().at(-1)?.nativeElement.focus());
     }
+  }
+
+  /**
+   * A row for a piece the shop never tagged.
+   *
+   * <p>The small gold - a mookuthi, a thin ring - is sold without a serial, so
+   * there is nothing to scan and everything the tag would have said is typed
+   * instead. Scanning stays on: the next tag still lands in its own row.
+   */
+  protected addLooseRow(): void {
+    this.loadLooseMasters();
+    const last = this.rows().at(-1);
+    const row = this.emptyRow();
+    row.loose = true;
+    row.rate = last?.rate ?? '';
+    row.wastage = last?.wastage ?? '';
+    this.rows.update((rows) => [...rows, row]);
+    setTimeout(() => document.getElementById('part' + row.key)?.focus());
+  }
+
+  private loadLooseMasters(): void {
+    if (this.itemTypes().length) {
+      return;
+    }
+    this.itemTypeService.lookup().subscribe((types) => this.itemTypes.set(types));
+    this.categoryService.lookup().subscribe((categories) => this.categories.set(categories));
+    this.hsnService.lookup().subscribe((codes) => this.hsnCodes.set(codes));
+  }
+
+  /** Purity belongs to an item type - gold's 916 is not silver's. */
+  protected setLooseType(index: number, itemTypeId: string): void {
+    this.patch(index, { itemTypeId, purityId: '', purities: [] });
+    if (!itemTypeId) {
+      return;
+    }
+    const key = this.rows()[index].key;
+    this.purityService.lookupByItemType(Number(itemTypeId)).subscribe((purities) => {
+      this.rows.update((rows) =>
+        rows.map((row) =>
+          row.key === key
+            ? { ...row, purities, purityId: purities.length === 1 ? String(purities[0].id) : row.purityId }
+            : row,
+        ),
+      );
+      this.schedule();
+    });
+  }
+
+  /** And a sub category to a category. */
+  protected setLooseCategory(index: number, categoryId: string): void {
+    this.patch(index, { categoryId, subCategoryId: '', subCategories: [] });
+    if (!categoryId) {
+      return;
+    }
+    const key = this.rows()[index].key;
+    this.subCategoryService.lookupByCategory(Number(categoryId)).subscribe((subCategories) => {
+      this.rows.update((rows) => rows.map((row) => (row.key === key ? { ...row, subCategories } : row)));
+    });
   }
 
   protected removeRow(index: number): void {
@@ -966,11 +1211,22 @@ export class SaleEditorComponent {
       customerId: this.customer()?.id ?? null,
       invoiceDate: this.invoiceDate() || null,
       items: this.readyRows().map((row) => ({
-        serialNumber: row.lookup!.serialNumber,
+        // A loose piece sends no serial, and says for itself what the tag
+        // would have said. A tagged piece sends the serial and nothing else:
+        // the server reads the rest off the stock record and refuses masters
+        // it did not ask for.
+        serialNumber: row.loose ? null : row.lookup!.serialNumber,
+        huid: row.huid.trim().toUpperCase() || null,
+        itemTypeId: row.loose ? Number(row.itemTypeId) : null,
+        purityId: row.loose ? Number(row.purityId) : null,
+        categoryId: row.loose ? Number(row.categoryId) : null,
+        subCategoryId: row.loose && row.subCategoryId ? Number(row.subCategoryId) : null,
+        hsnId: row.loose ? Number(row.hsnId) : null,
         particulars: row.particulars.trim() || null,
-        // Sent only for a box. A single piece is sold whole and the server
-        // refuses a weight for it rather than quietly ignoring one.
-        weightGrams: row.lookup!.bulk ? toNumber(row.weight) : null,
+        // Sent for a box and for a loose piece - both are weighed at the
+        // counter. A single tagged piece is sold whole and the server refuses
+        // a weight for it rather than quietly ignoring one.
+        weightGrams: row.loose || row.lookup!.bulk ? toNumber(row.weight) : null,
         wastagePercentage: toNumber(row.wastage),
         ratePerGram: toNumber(row.rate),
         makingCharge: toNumber(row.making),
@@ -1010,6 +1266,15 @@ export class SaleEditorComponent {
       wastage: '',
       rate: '',
       making: '',
+      huid: '',
+      loose: false,
+      itemTypeId: '',
+      purityId: '',
+      categoryId: '',
+      subCategoryId: '',
+      hsnId: '',
+      purities: [],
+      subCategories: [],
     };
   }
 }

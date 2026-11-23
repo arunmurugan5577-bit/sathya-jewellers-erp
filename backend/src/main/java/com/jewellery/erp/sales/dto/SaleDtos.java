@@ -37,8 +37,10 @@ public final class SaleDtos {
     @Schema(name = "SaleLine")
     public record Line(
             int lineNumber,
-            Long inventoryItemId,
-            String serialNumber,
+            @Schema(description = "Null for a loose piece that was never in stock") Long inventoryItemId,
+            @Schema(description = "Null for a loose piece") String serialNumber,
+            @Schema(example = "AZ1234", description = "The BIS hallmark, where the piece carries one")
+            String huid,
             String particulars,
             String itemTypeName,
             String purityName,

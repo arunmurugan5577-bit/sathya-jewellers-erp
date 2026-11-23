@@ -9,7 +9,12 @@ import com.jewellery.erp.common.exception.StateConflictException;
 import com.jewellery.erp.common.util.Money;
 import com.jewellery.erp.common.util.StringNormalizer;
 import com.jewellery.erp.customer.entity.Customer;
+import com.jewellery.erp.category.service.CategoryService;
 import com.jewellery.erp.customer.service.CustomerService;
+import com.jewellery.erp.hsn.service.HsnCodeService;
+import com.jewellery.erp.itemtype.service.ItemTypeService;
+import com.jewellery.erp.purity.service.PurityService;
+import com.jewellery.erp.subcategory.service.SubCategoryService;
 import com.jewellery.erp.inventory.entity.InventoryItem;
 import com.jewellery.erp.inventory.service.InventoryItemService;
 import com.jewellery.erp.numbering.DocumentNumberService;
@@ -43,6 +48,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,6 +93,12 @@ public class SaleService {
     private final ShopSettingsService shopSettingsService;
     private final DocumentNumberService documentNumberService;
     private final BusinessClock businessClock;
+    // Only a loose line needs these: a tagged piece brings its own masters.
+    private final ItemTypeService itemTypeService;
+    private final PurityService purityService;
+    private final CategoryService categoryService;
+    private final SubCategoryService subCategoryService;
+    private final HsnCodeService hsnCodeService;
 
     public SaleService(
             SaleRepository repository,
@@ -98,7 +110,12 @@ public class SaleService {
             ChitRedemptionService chitRedemptionService,
             ShopSettingsService shopSettingsService,
             DocumentNumberService documentNumberService,
-            BusinessClock businessClock) {
+            BusinessClock businessClock,
+            ItemTypeService itemTypeService,
+            PurityService purityService,
+            CategoryService categoryService,
+            SubCategoryService subCategoryService,
+            HsnCodeService hsnCodeService) {
         this.repository = repository;
         this.mapper = mapper;
         this.calculator = calculator;
@@ -109,6 +126,11 @@ public class SaleService {
         this.shopSettingsService = shopSettingsService;
         this.documentNumberService = documentNumberService;
         this.businessClock = businessClock;
+        this.itemTypeService = itemTypeService;
+        this.purityService = purityService;
+        this.categoryService = categoryService;
+        this.subCategoryService = subCategoryService;
+        this.hsnCodeService = hsnCodeService;
     }
 
     // ------------------------------------------------------------- queries ---
@@ -135,11 +157,13 @@ public class SaleService {
      * check under lock.
      */
     public SaleDtos.Calculation calculate(SaleRequests.Sale request) {
+        request.items().forEach(SaleService::assertLineIsOneKindOrTheOther);
         List<InventoryItem> pieces = new ArrayList<>();
         for (SaleRequests.Item line : request.items()) {
-            pieces.add(inventoryItemService.requireSellable(line.serialNumber()));
+            // Null where the line is a loose piece: there is nothing to look up.
+            pieces.add(isLoose(line) ? null : inventoryItemService.requireSellable(line.serialNumber()));
         }
-        assertNoDuplicates(pieces);
+        assertNoDuplicates(pieces.stream().filter(Objects::nonNull).toList());
         List<BigDecimal> weights = billedWeights(request, pieces);
 
         BigDecimal adjustment = sumAdjustments(request);
@@ -168,8 +192,13 @@ public class SaleService {
 
         List<SaleDtos.Line> lines = new ArrayList<>();
         for (int i = 0; i < pieces.size(); i++) {
+            SaleRequests.Item requested = request.items().get(i);
             lines.add(mapper.toPreviewLine(i + 1, pieces.get(i),
-                    particulars(request.items().get(i), pieces.get(i)), result.lines().get(i)));
+                    particulars(requested, pieces.get(i)),
+                    StringNormalizer.trimToNull(requested.huid()) == null
+                            ? null
+                            : requested.huid().trim().toUpperCase(),
+                    result.lines().get(i)));
         }
         return new SaleDtos.Calculation(lines, mapper.toTotals(result));
     }
@@ -213,9 +242,13 @@ public class SaleService {
         Customer customer = customerService.requireActive(request.customerId());
         LocalDate invoiceDate = resolveDate(request.invoiceDate());
 
+        request.items().forEach(SaleService::assertLineIsOneKindOrTheOther);
+
         // Lock 1: the pieces. A second counter selling the same piece waits here,
-        // then finds it SOLD.
+        // then finds it SOLD. Loose pieces are not in stock and so are not in
+        // the lock; their place in the list is held by a null.
         List<String> serials = request.items().stream()
+                .filter(line -> !isLoose(line))
                 .map(line -> InventoryItemService.canonicalSerial(line.serialNumber()))
                 .toList();
         if (new HashSet<>(serials).size() != serials.size()) {
@@ -223,7 +256,11 @@ public class SaleService {
                     "The same serial number is on this invoice more than once.");
         }
         Map<String, InventoryItem> locked = inventoryItemService.lockSellable(serials);
-        List<InventoryItem> pieces = serials.stream().map(locked::get).toList();
+        List<InventoryItem> pieces = request.items().stream()
+                .map(line -> isLoose(line)
+                        ? null
+                        : locked.get(InventoryItemService.canonicalSerial(line.serialNumber())))
+                .toList();
         // Settled under the lock: a bulk box another counter has just drawn from
         // may no longer hold what this invoice is asking of it.
         List<BigDecimal> weights = billedWeights(request, pieces);
@@ -272,7 +309,10 @@ public class SaleService {
         }
         List<InventoryItemService.Billed> billed = new ArrayList<>(pieces.size());
         for (int i = 0; i < pieces.size(); i++) {
-            billed.add(new InventoryItemService.Billed(pieces.get(i), weights.get(i)));
+            // A loose piece has no stock record to take anything out of.
+            if (pieces.get(i) != null) {
+                billed.add(new InventoryItemService.Billed(pieces.get(i), weights.get(i)));
+            }
         }
         inventoryItemService.billOut(billed);
 
@@ -288,7 +328,7 @@ public class SaleService {
                 saved.getGrandTotal(), saved.getNetPayable());
         for (int i = 0; i < pieces.size(); i++) {
             InventoryItem piece = pieces.get(i);
-            if (piece.isBulk()) {
+            if (piece != null && piece.isBulk()) {
                 log.info("  bulk {}: {}g billed, {}g left",
                         piece.getSerialNumber(), weights.get(i), piece.getRemainingWeightGrams());
             }
@@ -350,7 +390,10 @@ public class SaleService {
         for (SaleItem line : sale.getItems()) {
             if (line.getLineStatus() == SaleItemStatus.ACTIVE) {
                 line.setLineStatus(SaleItemStatus.CANCELLED);
-                returning.merge(line.getInventoryItem().getId(), line.getNetWeightGrams(), BigDecimal::add);
+                // A loose piece never came out of stock, so none goes back.
+                if (!line.isLoose()) {
+                    returning.merge(line.getInventoryItem().getId(), line.getNetWeightGrams(), BigDecimal::add);
+                }
             }
         }
         Map<Long, BigDecimal> released = new LinkedHashMap<>();
@@ -403,7 +446,7 @@ public class SaleService {
 
         Map<Long, BigDecimal> returning = new LinkedHashMap<>();
         for (SaleItem line : detailed.getItems()) {
-            if (line.getLineStatus() == SaleItemStatus.ACTIVE) {
+            if (line.getLineStatus() == SaleItemStatus.ACTIVE && !line.isLoose()) {
                 returning.merge(line.getInventoryItem().getId(), line.getNetWeightGrams(), BigDecimal::add);
             }
         }
@@ -475,10 +518,19 @@ public class SaleService {
      * then used everywhere - pricing, the stock movement and the figure stored on
      * the line - so those three can never disagree.
      */
+    /**
+     * The weight each line bills.
+     *
+     * <p>A tagged piece is checked against the stock it has left; a loose one
+     * has no stock to check, so what the counter weighed is what it bills.
+     */
     private List<BigDecimal> billedWeights(SaleRequests.Sale request, List<InventoryItem> pieces) {
         List<BigDecimal> weights = new ArrayList<>(pieces.size());
         for (int i = 0; i < pieces.size(); i++) {
-            weights.add(inventoryItemService.assertBillable(pieces.get(i), request.items().get(i).weightGrams()));
+            SaleRequests.Item requested = request.items().get(i);
+            weights.add(pieces.get(i) == null
+                    ? Money.weight(requested.weightGrams())
+                    : inventoryItemService.assertBillable(pieces.get(i), requested.weightGrams()));
         }
         return weights;
     }
@@ -494,7 +546,12 @@ public class SaleService {
                     line.wastagePercentage(),
                     line.ratePerGram(),
                     line.makingCharge(),
-                    piece.getHsnCode().getGstPercentage()));
+                    // The rate comes from the piece's HSN code either way: off
+                    // the piece when there is one, off the code the counter
+                    // chose when there is not.
+                    piece != null
+                            ? piece.getHsnCode().getGstPercentage()
+                            : hsnCodeService.requireActive(line.hsnId()).getGstPercentage()));
         }
         return inputs;
     }
@@ -505,15 +562,35 @@ public class SaleService {
         line.setLineNumber((short) lineNumber);
         line.setInventoryItem(piece);
         line.setLineStatus(SaleItemStatus.ACTIVE);
-        line.setSerialNumber(piece.getSerialNumber());
-        line.setBulk(piece.isBulk());
-        line.setParticulars(particulars(requested, piece));
-        line.setHsnCode(piece.getHsnCode().getHsnCode());
+        line.setHuid(StringNormalizer.trimToNull(requested.huid()) == null
+                ? null
+                : requested.huid().trim().toUpperCase());
         line.setGstPercentage(r.gstPercentage());
-        line.setItemType(piece.getItemType());
-        line.setPurity(piece.getPurity());
-        line.setCategory(piece.getCategory());
-        line.setSubCategory(piece.getSubCategory());
+        if (piece != null) {
+            line.setSerialNumber(piece.getSerialNumber());
+            line.setBulk(piece.isBulk());
+            line.setParticulars(particulars(requested, piece));
+            line.setHsnCode(piece.getHsnCode().getHsnCode());
+            line.setItemType(piece.getItemType());
+            line.setPurity(piece.getPurity());
+            line.setCategory(piece.getCategory());
+            line.setSubCategory(piece.getSubCategory());
+        } else {
+            // A loose piece: no serial, no stock, and everything a tagged one
+            // would have carried typed in instead.
+            line.setBulk(false);
+            line.setParticulars(StringNormalizer.trimToNull(requested.particulars()));
+            line.setHsnCode(hsnCodeService.requireActive(requested.hsnId()).getHsnCode());
+            line.setItemType(itemTypeService.requireActive(requested.itemTypeId()));
+            // Checked as a pair, not just as ids: 22K belongs to gold, and a
+            // Womens Ring belongs to Ring. A loose line is typed by hand and
+            // is the one place those could be mismatched.
+            line.setPurity(purityService.requireActiveForItemType(requested.purityId(), requested.itemTypeId()));
+            line.setCategory(categoryService.requireActive(requested.categoryId()));
+            line.setSubCategory(requested.subCategoryId() == null
+                    ? null
+                    : subCategoryService.requireActiveInCategory(requested.subCategoryId(), requested.categoryId()));
+        }
         line.setNetWeightGrams(r.netWeightGrams());
         line.setWastagePercentage(r.wastagePercentage());
         line.setWastageWeightGrams(r.wastageWeightGrams());
@@ -565,9 +642,71 @@ public class SaleService {
         sale.setPaymentStatus(r.paymentStatus());
     }
 
+    /** A line with no serial number is a loose piece, typed rather than scanned. */
+    private static boolean isLoose(SaleRequests.Item line) {
+        return StringNormalizer.trimToNull(line.serialNumber()) == null;
+    }
+
+    /**
+     * A line is a tagged piece or a loose one, and says which by what it sends.
+     *
+     * <p>Checked here rather than with annotations because the rule is about
+     * the line as a whole: which fields are required depends on whether a
+     * serial came with it, and a message naming the field the counter has to
+     * fill is worth more than six that each name one.
+     */
+    /**
+     * A line is a tagged piece or a loose one, never half of each.
+     *
+     * <p>Package visible for its own test: the rule is the whole difference
+     * between the two kinds of line and is worth checking on its own, away
+     * from the stock, locks and customers the rest of a sale needs.
+     */
+    static void assertLineIsOneKindOrTheOther(SaleRequests.Item line) {
+        boolean loose = isLoose(line);
+        if (!loose) {
+            if (line.itemTypeId() != null || line.purityId() != null || line.categoryId() != null
+                    || line.hsnId() != null) {
+                throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "items",
+                        ("Serial number %s already says what the piece is. Leave the item type, purity, "
+                                + "category and HSN out, or leave the serial number out to bill a loose piece.")
+                                .formatted(line.serialNumber().trim()));
+            }
+            return;
+        }
+        Map<String, String> missing = new LinkedHashMap<>();
+        if (StringNormalizer.trimToNull(line.particulars()) == null) {
+            missing.put("particulars", "Say what the piece is.");
+        }
+        if (line.itemTypeId() == null) {
+            missing.put("itemTypeId", "Choose what it is made of.");
+        }
+        if (line.purityId() == null) {
+            missing.put("purityId", "Choose its purity.");
+        }
+        if (line.categoryId() == null) {
+            missing.put("categoryId", "Choose its category.");
+        }
+        if (line.hsnId() == null) {
+            missing.put("hsnId", "Choose the HSN code it is taxed under.");
+        }
+        if (line.weightGrams() == null) {
+            missing.put("weightGrams", "Weigh it.");
+        }
+        if (!missing.isEmpty()) {
+            throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED,
+                    "A piece sold without a serial number has to be described in full.", missing);
+        }
+    }
+
     private static String particulars(SaleRequests.Item requested, InventoryItem piece) {
         String typed = StringNormalizer.trimToNull(requested.particulars());
-        return typed != null ? typed : SaleMapper.defaultParticulars(piece);
+        if (typed != null) {
+            return typed;
+        }
+        // A loose line has no piece to fall back on; its description is
+        // required, so by here there is always one.
+        return piece == null ? null : SaleMapper.defaultParticulars(piece);
     }
 
     private static List<Long> adjustmentIds(SaleRequests.Sale request) {

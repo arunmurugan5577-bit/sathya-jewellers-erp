@@ -53,18 +53,27 @@ public class SaleMapper {
                 : item.getSubCategory().getName();
     }
 
+    /**
+     * A previewed line.
+     *
+     * <p>{@code item} is null for a loose piece, which has no stock record to
+     * read a name off. The preview shows what the counter typed, which is all
+     * there is to show, and the saved line fills the rest in from the masters
+     * they chose.
+     */
     public SaleDtos.Line toPreviewLine(
-            int lineNumber, InventoryItem item, String particulars, SaleCalculator.LineResult r) {
+            int lineNumber, InventoryItem item, String particulars, String huid, SaleCalculator.LineResult r) {
         return new SaleDtos.Line(
                 lineNumber,
-                item.getId(),
-                item.getSerialNumber(),
+                item == null ? null : item.getId(),
+                item == null ? null : item.getSerialNumber(),
+                huid,
                 particulars,
-                item.getItemType().getName(),
-                item.getPurity().getName(),
-                item.getCategory().getName(),
-                item.getSubCategory() == null ? null : item.getSubCategory().getName(),
-                item.getHsnCode().getHsnCode(),
+                item == null ? null : item.getItemType().getName(),
+                item == null ? null : item.getPurity().getName(),
+                item == null ? null : item.getCategory().getName(),
+                item == null || item.getSubCategory() == null ? null : item.getSubCategory().getName(),
+                item == null ? null : item.getHsnCode().getHsnCode(),
                 r.gstPercentage(),
                 r.netWeightGrams(),
                 r.wastagePercentage(),
@@ -177,8 +186,9 @@ public class SaleMapper {
     private SaleDtos.Line toLine(SaleItem i) {
         return new SaleDtos.Line(
                 i.getLineNumber(),
-                i.getInventoryItem().getId(),
+                i.isLoose() ? null : i.getInventoryItem().getId(),
                 i.getSerialNumber(),
+                i.getHuid(),
                 i.getParticulars(),
                 i.getItemType().getName(),
                 i.getPurity().getName(),

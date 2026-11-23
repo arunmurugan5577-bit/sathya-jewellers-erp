@@ -24,12 +24,33 @@ public final class SaleRequests {
 
     private SaleRequests() {}
 
+    /**
+     * One line of the invoice: a tagged piece, or a loose one.
+     *
+     * <p>A tagged piece needs only its serial number - the server reads the
+     * rest off the piece. A loose piece has no serial and no stock record, so
+     * what would have been read off the piece is typed instead: the small gold
+     * a shop sells without ever tagging it.
+     *
+     * <p>Which kind a line is follows from whether a serial was sent. Nothing
+     * else distinguishes them and nothing else should: a line with a serial
+     * and a hand-typed purity would leave two answers to the same question.
+     */
     @Schema(name = "SaleItemRequest")
     public record Item(
-            @Schema(example = "000123")
-            @NotBlank(message = "Serial number is required")
+            @Schema(example = "000123", description = "A tagged piece. Leave out for a loose one.")
             @Pattern(regexp = "^\\s*\\d{1,6}\\s*$", message = "Serial number must be up to six digits")
             String serialNumber,
+
+            @Schema(example = "AZ1234", description = "The BIS hallmark stamped on the piece, if it carries one")
+            @Pattern(regexp = "^\\s*[0-9A-Za-z]{6}\\s*$", message = "A HUID is six letters or digits")
+            String huid,
+
+            @Schema(description = "Loose piece only: what it is made of") Long itemTypeId,
+            @Schema(description = "Loose piece only: its purity") Long purityId,
+            @Schema(description = "Loose piece only: its category") Long categoryId,
+            @Schema(description = "Loose piece only: its sub category, if it has one") Long subCategoryId,
+            @Schema(description = "Loose piece only: the HSN code it is taxed under") Long hsnId,
 
             @Schema(description = "Printed description. Defaults to the piece's category and sub category.",
                     example = "Ladies Ring")
@@ -37,8 +58,8 @@ public final class SaleRequests {
             String particulars,
 
             @Schema(example = "4.100",
-                    description = "Weight being sold out of a bulk box. Only for bulk items; "
-                            + "a single piece is sold whole and its own weight is used.")
+                    description = "Weight being sold out of a bulk box, or the whole weight of a loose "
+                            + "piece. A tagged single piece is sold whole and its own weight is used.")
             @DecimalMin(value = "0.001", message = "The weight sold must be greater than zero")
             @Digits(integer = 9, fraction = 3, message = "Weight allows at most 3 decimal places")
             BigDecimal weightGrams,

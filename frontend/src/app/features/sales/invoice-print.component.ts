@@ -72,9 +72,13 @@ import { WeightPipe } from '../../shared/pipes/weight.pipe';
               <td class="center">{{ line.lineNumber }}</td>
               <td class="left">
                 {{ line.particulars }}
-                <!-- Purity only: the serial number is the shop's own stock
-                     reference and has no place on the customer's bill. -->
-                <div class="sub">{{ line.purityName }}</div>
+                <!-- Purity and the hallmark. The serial number is the shop's
+                     own stock reference and has no place on the customer's
+                     bill; the HUID is stamped on the piece in their hand and
+                     is how they identify it afterwards. -->
+                <div class="sub">
+                  {{ line.purityName }}@if (line.huid) { &middot; HUID {{ line.huid }} }
+                </div>
               </td>
               <td class="center">{{ line.hsnCode }}</td>
               <td>{{ line.netWeightGrams.toFixed(3) }}</td>

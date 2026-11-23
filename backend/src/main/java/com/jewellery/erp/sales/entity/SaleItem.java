@@ -46,15 +46,26 @@ public class SaleItem extends AuditableEntity {
     private short lineNumber;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "inventory_item_id", nullable = false, updatable = false)
+    /** The piece off the shelf. Null for a loose piece that was never tagged. */
+    @JoinColumn(name = "inventory_item_id", updatable = false)
     private InventoryItem inventoryItem;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "line_status", nullable = false, length = 20)
     private SaleItemStatus lineStatus = SaleItemStatus.ACTIVE;
 
-    @Column(name = "serial_number", nullable = false, length = 6, updatable = false)
+    /** Null exactly when there is no inventory piece behind the line. */
+    @Column(name = "serial_number", length = 6, updatable = false)
     private String serialNumber;
+
+    /** The six-character BIS hallmark stamped on the piece, where it has one. */
+    @Column(name = "huid", length = 6, updatable = false)
+    private String huid;
+
+    /** A piece the shop never tagged: no serial, no stock to put back. */
+    public boolean isLoose() {
+        return inventoryItem == null;
+    }
 
     /**
      * Whether this line sold weight out of a box rather than one whole article.
