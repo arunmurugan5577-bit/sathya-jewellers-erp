@@ -1111,7 +1111,17 @@ export class SaleEditorComponent {
         this.rows.update((rows) =>
           rows.map((r) =>
             r.key === key
-              ? { ...r, looking: false, serial: item.serialNumber, lookup: item, particulars: r.particulars || item.suggestedParticulars }
+              ? {
+                  ...r,
+                  looking: false,
+                  serial: item.serialNumber,
+                  lookup: item,
+                  particulars: r.particulars || item.suggestedParticulars,
+                  // The piece knows its own hallmark. Whatever the counter has
+                  // already typed stands - a re-hallmarked article is the one
+                  // in the customer's hand.
+                  huid: r.huid || (item.huid ?? ''),
+                }
               : r,
           ),
         );

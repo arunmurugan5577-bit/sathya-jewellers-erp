@@ -333,6 +333,7 @@ public class LabelService {
                     serial,
                     purityText,
                     particulars(item),
+                    item.getHuid(),
                     item.getWeightGrams(),
                     item.getSize(),
                     item.getItemType().getName(),

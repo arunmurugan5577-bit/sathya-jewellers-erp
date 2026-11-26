@@ -16,6 +16,8 @@ public final class SaleDtos {
     public record ItemLookup(
             Long inventoryItemId,
             @Schema(example = "000123") String serialNumber,
+            @Schema(example = "AZ1234", description = "The piece's hallmark, so the counter need not retype it")
+            String huid,
             String itemTypeName,
             String purityName,
             Long categoryId,

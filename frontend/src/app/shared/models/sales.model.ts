@@ -149,6 +149,8 @@ export const PAYMENT_METHODS: readonly { value: PaymentMethod; label: string }[]
 export interface SaleItemLookup {
   inventoryItemId: number;
   serialNumber: string;
+  /** The hallmark the piece was tagged with, so the counter need not retype it. */
+  huid?: string | null;
   itemTypeName: string;
   purityName: string;
   categoryId: number;

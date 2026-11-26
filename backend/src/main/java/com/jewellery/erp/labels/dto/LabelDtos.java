@@ -68,6 +68,8 @@ public final class LabelDtos {
             @Schema(example = "22K / 916", description = "Printed after the serial number; gold only")
             String purityText,
             @Schema(example = "KOLUSU", description = "Sub category, or category, as printed") String particulars,
+            @Schema(example = "AZ1234", description = "BIS hallmark; printed under the weight when the piece has one")
+            String huid,
             @Schema(example = "32.130") BigDecimal weightGrams,
             @Schema(example = "11") String size,
             @Schema(example = "Gold") String itemTypeName,

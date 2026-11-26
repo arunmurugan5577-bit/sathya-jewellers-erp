@@ -58,7 +58,7 @@ class LabelLayoutTest {
     }
 
     private static LabelDtos.Label gold() {
-        return new LabelDtos.Label(1L, "905351", "22K / 916", "Womens Ring", new BigDecimal("20.800"), null,
+        return new LabelDtos.Label(1L, "905351", "22K / 916", "Womens Ring", null, new BigDecimal("20.800"), null,
                 "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
     }
 
@@ -132,7 +132,7 @@ class LabelLayoutTest {
         LabelSettings settings = tagSettings();
         settings.setDetailFontPt(new BigDecimal("7.00"));
 
-        LabelDtos.Label kolusu = new LabelDtos.Label(9L, "000001", "80", "Silver T.Kolusu",
+        LabelDtos.Label kolusu = new LabelDtos.Label(9L, "000001", "80", "Silver T.Kolusu", null,
                 new BigDecimal("36.200"), "5.5\" S TYPE", "Silver", "Silver T.Kolusu",
                 "Silver T.Kolusu", "SJ", "AVAILABLE");
 
@@ -247,7 +247,7 @@ class LabelLayoutTest {
     @DisplayName("a piece with a size prints it under the weight, still inside the tag")
     void sizePrintsUnderTheWeight() {
         LabelSettings settings = tagSettings();
-        LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring",
+        LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring", null,
                 new BigDecimal("1.560"), "11", "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
 
         LabelLayout layout = layoutOf(ring, settings);
@@ -267,7 +267,7 @@ class LabelLayoutTest {
     @DisplayName("a wordy size such as \"18 inch\" still fits")
     void aLongSizeStillFits() {
         LabelSettings settings = tagSettings();
-        LabelDtos.Label chain = new LabelDtos.Label(5L, "998290", "22K / 916", "Gents Chain",
+        LabelDtos.Label chain = new LabelDtos.Label(5L, "998290", "22K / 916", "Gents Chain", null,
                 new BigDecimal("24.750"), "18 inch", "Gold", "Chain", "Gents Chain", "SJ", "AVAILABLE");
 
         LabelLayout layout = layoutOf(chain, settings);
@@ -283,12 +283,45 @@ class LabelLayoutTest {
     }
 
     @Test
+    @DisplayName("the hallmark reads under the weight, and only when the piece has one")
+    void theHallmarkIsTheLastDetailLine() {
+        LabelDtos.Label hallmarked = new LabelDtos.Label(2L, "998284", null, "Womens Ring", "hm2024",
+                new BigDecimal("1.560"), "11", "Silver", "Ring", "Womens Ring", "SJ", "AVAILABLE");
+
+        // Last, because it is the line a jeweller reads least - and the one
+        // the tag can best afford to lose, since the block is fitted top down.
+        assertThat(LabelLayout.detailLines(hallmarked))
+                .containsExactly("WOMENS RING", "GMS.1.560", "Size:11", "HUID:HM2024");
+
+        LabelDtos.Label unmarked = new LabelDtos.Label(3L, "998285", null, "Womens Ring", "  ",
+                new BigDecimal("1.560"), null, "Silver", "Ring", "Womens Ring", "SJ", "AVAILABLE");
+        assertThat(LabelLayout.detailLines(unmarked)).containsExactly("WOMENS RING", "GMS.1.560");
+    }
+
+    @Test
+    @DisplayName("a hallmarked tag still keeps every line on the tag")
+    void aHallmarkedTagDoesNotOverflow() {
+        LabelSettings settings = tagSettings();
+        LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring", "HM2024",
+                new BigDecimal("1.560"), "11", "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
+
+        LabelLayout layout = layoutOf(ring, settings);
+
+        assertThat(detail(layout, "HUID:HM2024")).isNotNull();
+        // The whole point of putting it in the detail column: the bars and the
+        // serial under them keep to their own side of the die-cut split line.
+        assertThat(detail(layout, "HUID:HM2024").xMm())
+                .isGreaterThan(LabelLayout.splitLineMm(settings));
+        assertThat(layout.bottomMm()).isLessThanOrEqualTo(settings.getLabelHeightMm());
+    }
+
+    @Test
     void weightAndSizeAreOnlyPrintedWhenThePieceHasThem() {
-        LabelDtos.Label withSize = new LabelDtos.Label(2L, "998284", null, "Womens Ring",
+        LabelDtos.Label withSize = new LabelDtos.Label(2L, "998284", null, "Womens Ring", null,
                 new BigDecimal("1.560"), "11", "Silver", "Ring", "Womens Ring", "SJ", "AVAILABLE");
         assertThat(LabelLayout.detailLines(withSize)).containsExactly("WOMENS RING", "GMS.1.560", "Size:11");
 
-        LabelDtos.Label withoutSize = new LabelDtos.Label(3L, "905351", null, "Womens Ring",
+        LabelDtos.Label withoutSize = new LabelDtos.Label(3L, "905351", null, "Womens Ring", null,
                 new BigDecimal("20.800"), "  ", "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
         assertThat(LabelLayout.detailLines(withoutSize)).containsExactly("WOMENS RING", "GMS.20.800");
     }
@@ -302,7 +335,7 @@ class LabelLayoutTest {
         settings.setShopMark(ShopMark.LOGO);
         settings.setShopLogoHeightMm(new BigDecimal("4.40"));
         settings.setDetailFontPt(new BigDecimal("4.00"));
-        LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring",
+        LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring", null,
                 new BigDecimal("1.560"), "11", "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
 
         LabelLayout layout = LabelLayout.of(ring, settings, renderer.modules("998284"), true);
@@ -329,7 +362,7 @@ class LabelLayoutTest {
         LabelSettings settings = tagSettings();
         settings.setShopMark(ShopMark.LOGO);
         settings.setShopLogoHeightMm(new BigDecimal("6.50"));
-        LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring",
+        LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring", null,
                 new BigDecimal("1.560"), "11", "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
 
         LabelLayout layout = LabelLayout.of(ring, settings, renderer.modules("998284"), true);
@@ -375,7 +408,7 @@ class LabelLayoutTest {
 
     /** The shop's own two tags, from the pair they photographed. */
     private static LabelDtos.Label salangai(String serial) {
-        return new LabelDtos.Label(1L, serial, null, "7\" Salangai", new BigDecimal("77.180"), "7 inch",
+        return new LabelDtos.Label(1L, serial, null, "7\" Salangai", null, new BigDecimal("77.180"), "7 inch",
                 "Silver", "Anklet", "Salangai", "SJ", "AVAILABLE");
     }
 
@@ -426,7 +459,7 @@ class LabelLayoutTest {
     }
 
     private static LabelDtos.Label named(String name) {
-        return new LabelDtos.Label(1L, "376", null, name, new BigDecimal("43.550"), null,
+        return new LabelDtos.Label(1L, "376", null, name, null, new BigDecimal("43.550"), null,
                 "Silver", "Anklet", "Thirukai", "SJ", "AVAILABLE");
     }
 

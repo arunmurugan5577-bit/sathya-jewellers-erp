@@ -111,6 +111,10 @@ import { InventoryService } from './inventory.service';
                 <dd>{{ record.subCategoryName || '-' }}</dd>
               </div>
               <div class="details__row">
+                <dt>HUID</dt>
+                <dd class="table__serial">{{ record.huid || '-' }}</dd>
+              </div>
+              <div class="details__row">
                 <dt>Size</dt>
                 <dd>{{ record.size || '-' }}</dd>
               </div>

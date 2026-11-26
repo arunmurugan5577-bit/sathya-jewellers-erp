@@ -25,6 +25,8 @@ public record InventoryItemDto(
         Long hsnId,
         @Schema(example = "7113") String hsnCode,
         @Schema(example = "3.00") BigDecimal gstPercentage,
+        @Schema(example = "AZ1234", description = "BIS hallmark, or null where the piece carries none")
+        String huid,
         @Schema(example = "16") String size,
         @Schema(example = "5.250", description = "Net weight of the piece, or of the whole box, in grams")
         BigDecimal weightGrams,

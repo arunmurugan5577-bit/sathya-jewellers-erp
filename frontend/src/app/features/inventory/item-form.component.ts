@@ -89,6 +89,34 @@ import { InventoryService } from './inventory.service';
                   }
                   <app-field-error [control]="form.controls.serialNumber" label="Serial number" />
                 </div>
+
+                <div class="field">
+                  <label class="field__label" for="huid">HUID</label>
+                  <input
+                    id="huid"
+                    class="input serial"
+                    formControlName="huid"
+                    maxlength="6"
+                    autocomplete="off"
+                    placeholder="AZ1234"
+                    [class.input--invalid]="invalid('huid')"
+                    (input)="upperCaseHuid()"
+                  />
+                  <p class="field__hint">
+                    Optional. The BIS hallmark stamped on the piece - six letters or digits. It
+                    prints on the tag and on the customer's invoice.
+                  </p>
+                  <!--
+                    Its own message rather than app-field-error: that component
+                    reads the control inside a computed(), which has no signal
+                    to invalidate it, so it renders once and never again. The
+                    red border below is live because the template re-reads
+                    invalid() every cycle.
+                  -->
+                  @if (invalid('huid')) {
+                    <p class="field__error">A HUID is exactly six letters or digits.</p>
+                  }
+                </div>
               </div>
             </div>
           </section>
@@ -317,6 +345,8 @@ export class ItemFormComponent implements OnInit {
     categoryId: this.formBuilder.control<number | null>(null, Validators.required),
     subCategoryId: this.formBuilder.control<number | null>(null),
     hsnId: this.formBuilder.control<number | null>(null),
+    // Six letters or digits, or nothing at all. Not every piece is hallmarked.
+    huid: this.formBuilder.nonNullable.control('', Validators.pattern(/^[0-9A-Za-z]{6}$/)),
     size: this.formBuilder.nonNullable.control('', Validators.maxLength(50)),
     bulk: this.formBuilder.nonNullable.control(false),
     weightGrams: this.formBuilder.control<number | null>(null, [
@@ -425,6 +455,7 @@ export class ItemFormComponent implements OnInit {
             serialNumber: item.serialNumber,
             itemTypeId: item.itemTypeId,
             categoryId: item.categoryId,
+            huid: item.huid ?? '',
             size: item.size ?? '',
             weightGrams: item.weightGrams,
             bulk: item.bulk,
@@ -462,8 +493,20 @@ export class ItemFormComponent implements OnInit {
     });
   }
 
+  /**
+   * A hallmark is read off a loupe and typed in whatever case comes out; the
+   * shop stores it upper case, so the field shows what will be stored.
+   */
+  protected upperCaseHuid(): void {
+    const control = this.form.controls.huid;
+    const upper = control.value.toUpperCase();
+    if (upper !== control.value) {
+      control.setValue(upper, { emitEvent: false });
+    }
+  }
+
   protected invalid(
-    control: 'serialNumber' | 'itemTypeId' | 'purityId' | 'categoryId' | 'weightGrams',
+    control: 'serialNumber' | 'itemTypeId' | 'purityId' | 'categoryId' | 'weightGrams' | 'huid',
   ): boolean {
     const field = this.form.controls[control];
     return field.invalid && (field.dirty || field.touched);
@@ -490,6 +533,7 @@ export class ItemFormComponent implements OnInit {
       categoryId: value.categoryId,
       subCategoryId: value.subCategoryId,
       hsnId: value.hsnId,
+      huid: value.huid.trim().toUpperCase() || null,
       size: value.size.trim() || null,
       bulk: value.bulk,
       weightGrams: value.weightGrams,

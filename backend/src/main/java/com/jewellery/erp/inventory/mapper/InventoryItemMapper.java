@@ -24,6 +24,7 @@ public class InventoryItemMapper {
                 entity.getHsnCode() == null ? null : entity.getHsnCode().getId(),
                 entity.getHsnCode() == null ? null : entity.getHsnCode().getHsnCode(),
                 entity.getHsnCode() == null ? null : entity.getHsnCode().getGstPercentage(),
+                entity.getHuid(),
                 entity.getSize(),
                 entity.getWeightGrams(),
                 entity.isBulk(),

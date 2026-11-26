@@ -16,6 +16,8 @@ export interface InventoryItem extends Audited {
   hsnId?: number | null;
   hsnCode?: string | null;
   gstPercentage?: number | null;
+  /** The BIS hallmark stamped on the piece. Null where it carries none. */
+  huid?: string | null;
   size?: string | null;
   /** The whole piece, or the whole box when bulk. */
   weightGrams: number;
@@ -41,6 +43,7 @@ export interface InventoryItemRequest {
   categoryId: number | null;
   subCategoryId?: number | null;
   hsnId?: number | null;
+  huid?: string | null;
   size?: string | null;
   bulk?: boolean;
   weightGrams: number | null;

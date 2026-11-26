@@ -412,9 +412,23 @@ public record LabelLayout(
         return lowest;
     }
 
-    /** "WOMENS RING", "GMS.20.800", "Size:11" - only the lines the piece actually has. */
+    /**
+     * "WOMENS RING", "GMS.20.800", "Size:11", "HUID:AZ1234" - only the lines
+     * the piece actually has.
+     *
+     * <p>The hallmark comes last because it is the line a jeweller reads least:
+     * the name, the weight and the size are what the tag is consulted for at
+     * the counter, and the mark is there for the customer and the auditor. It
+     * is also the line the tag can most afford to lose if one has to go, and
+     * the block is fitted top down.
+     *
+     * <p>In the detail column rather than beside the serial under the bars:
+     * that side of the tag stops at the die-cut split line, and six more
+     * characters there would either crowd the barcode's quiet zone or push the
+     * bars narrower, which is how a barcode stops scanning.
+     */
     public static List<String> detailLines(LabelDtos.Label label) {
-        List<String> lines = new ArrayList<>(3);
+        List<String> lines = new ArrayList<>(4);
         if (label.particulars() != null && !label.particulars().isBlank()) {
             lines.add(label.particulars().trim().toUpperCase());
         }
@@ -423,6 +437,9 @@ public record LabelLayout(
         }
         if (label.size() != null && !label.size().isBlank()) {
             lines.add("Size:" + label.size().trim());
+        }
+        if (label.huid() != null && !label.huid().isBlank()) {
+            lines.add("HUID:" + label.huid().trim().toUpperCase());
         }
         return lines;
     }

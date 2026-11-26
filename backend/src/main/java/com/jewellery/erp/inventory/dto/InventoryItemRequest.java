@@ -47,6 +47,11 @@ public record InventoryItemRequest(
         @Schema(example = "1", description = "Optional at stock-in; required before billing")
         Long hsnId,
 
+        @Schema(example = "AZ1234",
+                description = "Optional. The BIS hallmark stamped on the piece: six letters or digits.")
+        @Pattern(regexp = "^\\s*[0-9A-Za-z]{6}\\s*$", message = "A HUID is six letters or digits")
+        String huid,
+
         @Schema(example = "16", description = "Free text - a ring size, a length, or a label")
         @Size(max = 50, message = "Size must not exceed 50 characters")
         String size,

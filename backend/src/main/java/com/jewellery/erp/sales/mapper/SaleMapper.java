@@ -18,6 +18,7 @@ public class SaleMapper {
         return new SaleDtos.ItemLookup(
                 item.getId(),
                 item.getSerialNumber(),
+                item.getHuid(),
                 item.getItemType().getName(),
                 item.getPurity().getName(),
                 item.getCategory().getId(),

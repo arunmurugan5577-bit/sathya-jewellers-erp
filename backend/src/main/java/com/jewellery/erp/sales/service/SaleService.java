@@ -195,9 +195,7 @@ public class SaleService {
             SaleRequests.Item requested = request.items().get(i);
             lines.add(mapper.toPreviewLine(i + 1, pieces.get(i),
                     particulars(requested, pieces.get(i)),
-                    StringNormalizer.trimToNull(requested.huid()) == null
-                            ? null
-                            : requested.huid().trim().toUpperCase(),
+                    huid(requested, pieces.get(i)),
                     result.lines().get(i)));
         }
         return new SaleDtos.Calculation(lines, mapper.toTotals(result));
@@ -562,9 +560,7 @@ public class SaleService {
         line.setLineNumber((short) lineNumber);
         line.setInventoryItem(piece);
         line.setLineStatus(SaleItemStatus.ACTIVE);
-        line.setHuid(StringNormalizer.trimToNull(requested.huid()) == null
-                ? null
-                : requested.huid().trim().toUpperCase());
+        line.setHuid(huid(requested, piece));
         line.setGstPercentage(r.gstPercentage());
         if (piece != null) {
             line.setSerialNumber(piece.getSerialNumber());
@@ -697,6 +693,20 @@ public class SaleService {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED,
                     "A piece sold without a serial number has to be described in full.", missing);
         }
+    }
+
+    /**
+     * The hallmark on this line: what was typed, or what the piece was tagged
+     * with.
+     *
+     * <p>A tagged piece already knows its own mark, so the counter does not
+     * retype it - but what they type still wins. A piece can be re-hallmarked,
+     * and the mark on the invoice should be the one on the article in the
+     * customer's hand.
+     */
+    private static String huid(SaleRequests.Item requested, InventoryItem piece) {
+        String typed = StringNormalizer.normalizeCode(requested.huid());
+        return typed != null ? typed : (piece == null ? null : piece.getHuid());
     }
 
     private static String particulars(SaleRequests.Item requested, InventoryItem piece) {

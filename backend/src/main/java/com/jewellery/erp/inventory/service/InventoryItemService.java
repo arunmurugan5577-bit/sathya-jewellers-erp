@@ -534,6 +534,9 @@ public class InventoryItemService {
     }
 
     private void applyAttributes(InventoryItem entity, InventoryItemRequest request) {
+        // Upper cased, like every other code the shop types: a hallmark read
+        // off a loupe is as likely to arrive "az12b4" as "AZ12B4".
+        entity.setHuid(StringNormalizer.normalizeCode(request.huid()));
         entity.setSize(StringNormalizer.trimToNull(request.size()));
         entity.setWeightGrams(request.weightGrams());
         entity.setDescription(StringNormalizer.trimToNull(request.description()));

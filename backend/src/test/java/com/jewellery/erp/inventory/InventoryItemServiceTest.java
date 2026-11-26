@@ -89,7 +89,7 @@ class InventoryItemServiceTest {
 
     private static InventoryItemRequest request(String serialNumber) {
         return new InventoryItemRequest(
-                serialNumber, 1L, 2L, 10L, null, null, "16", false, new BigDecimal("5.250"), "Plain band", null);
+                serialNumber, 1L, 2L, 10L, null, null, null, "16", false, new BigDecimal("5.250"), "Plain band", null);
     }
 
     private Purity purity916() {
@@ -227,7 +227,7 @@ class InventoryItemServiceTest {
                             "subCategoryId", "Sub category 'Jhumka' does not belong to the selected category."));
 
             InventoryItemRequest withForeignSubCategory = new InventoryItemRequest(
-                    "000123", 1L, 2L, 10L, 99L, null, "16", false, new BigDecimal("5.250"), null, null);
+                    "000123", 1L, 2L, 10L, 99L, null, null, "16", false, new BigDecimal("5.250"), null, null);
 
             assertThatThrownBy(() -> service.create(withForeignSubCategory))
                     .isInstanceOf(BusinessRuleException.class)
@@ -335,7 +335,7 @@ class InventoryItemServiceTest {
             stubValidReferences();
 
             InventoryItemRequest sameWeight = new InventoryItemRequest(
-                    "000123", 1L, 2L, 10L, null, null, "16", true,
+                    "000123", 1L, 2L, 10L, null, null, null, "16", true,
                     new BigDecimal("5.250"), "Metti box, second tray", null);
 
             service.update(5L, sameWeight);
@@ -361,7 +361,7 @@ class InventoryItemServiceTest {
             // Nothing has been billed off it, so a mis-keyed weight is simply a
             // correction and the whole box is still there to be sold.
             service.update(5L, new InventoryItemRequest(
-                    "000123", 1L, 2L, 10L, null, null, "16", true,
+                    "000123", 1L, 2L, 10L, null, null, null, "16", true,
                     new BigDecimal("5.250"), null, null));
 
             assertThat(box.getWeightGrams()).isEqualByComparingTo("5.250");
@@ -376,7 +376,7 @@ class InventoryItemServiceTest {
             stubValidReferences();
 
             assertThatThrownBy(() -> service.update(5L, new InventoryItemRequest(
-                    "000123", 1L, 2L, 10L, null, null, "16", true,
+                    "000123", 1L, 2L, 10L, null, null, null, "16", true,
                     new BigDecimal("9.000"), null, null)))
                     .isInstanceOf(StateConflictException.class)
                     .hasMessageContaining("1.150")

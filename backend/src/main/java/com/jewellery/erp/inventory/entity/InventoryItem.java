@@ -91,6 +91,17 @@ public class InventoryItem extends AuditableEntity {
     private HsnCode hsnCode;
 
     /**
+     * The BIS hallmark stamped on the piece, where it carries one.
+     *
+     * <p>Optional, and stays optional: silver is not hallmarked and neither is
+     * every scrap of gold the shop tags. Stored as the six characters BIS
+     * issues, upper cased on the way in so one piece cannot be entered twice
+     * under two spellings of the same mark.
+     */
+    @Column(name = "huid", length = 6)
+    private String huid;
+
+    /**
      * Free text for now - "7", "Medium", "18 inch". A per-category size master is
      * a later refinement; storing text keeps every category expressible today
      * without inventing a taxonomy the shop has not asked for.

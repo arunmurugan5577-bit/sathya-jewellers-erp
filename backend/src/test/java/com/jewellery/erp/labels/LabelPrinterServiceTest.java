@@ -55,7 +55,7 @@ class LabelPrinterServiceTest {
     }
 
     private static LabelDtos.Label gold() {
-        return new LabelDtos.Label(1L, "905351", "22K / 916", "Womens Ring", new BigDecimal("5.250"), null,
+        return new LabelDtos.Label(1L, "905351", "22K / 916", "Womens Ring", null, new BigDecimal("5.250"), null,
                 "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
     }
 
