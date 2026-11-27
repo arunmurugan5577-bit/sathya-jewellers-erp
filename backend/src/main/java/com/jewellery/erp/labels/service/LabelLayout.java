@@ -92,7 +92,7 @@ public record LabelLayout(
      * bar. A description too long even at this size overflows rather than
      * disappearing - an unreadable word is still worth more than no word.
      */
-    private static final BigDecimal MIN_NAME_FONT_PT = new BigDecimal("3.0");
+    private static final BigDecimal MIN_DETAIL_FONT_PT = new BigDecimal("3.0");
 
     /**
      * How much smaller the name may be set to keep it on one line.
@@ -232,7 +232,7 @@ public record LabelLayout(
             detailColumnX = detailColumnX.max(
                     tagLeft.add(settings.getSplitLineMm()).add(SPLIT_GAP_MM));
         }
-        BigDecimal detailLineH = lineHeightMm(settings.getDetailFontPt());
+        BigDecimal askedLineH = lineHeightMm(settings.getDetailFontPt());
 
         // Whether the description sits beside the bars is settled here, on
         // what it would measure at the size it was asked for - before any of
@@ -261,7 +261,7 @@ public record LabelLayout(
                 ? (details.isEmpty() ? BigDecimal.ZERO : LOGO_TOP_MM).add(logoSize)
                 : BigDecimal.ZERO;
         BigDecimal naturalStackedH = codeH.add(IDENT_TOP_MM)
-                .add(detailLineH.multiply(BigDecimal.valueOf(details.size() + (shop.isEmpty() ? 0 : 1))))
+                .add(askedLineH.multiply(BigDecimal.valueOf(details.size() + (shop.isEmpty() ? 0 : 1))))
                 .add(logoExtra);
         boolean sideBySide = !hasDetailBlock
                 || detailColumnX.subtract(originX).add(naturalDetailW).compareTo(contentW) <= 0
@@ -272,6 +272,16 @@ public record LabelLayout(
             detailColumnX = originX;
         }
         BigDecimal detailRoomW = tagRight.subtract(detailColumnX).max(BigDecimal.ZERO);
+        // How deep the description may go: the whole content box when it sits
+        // beside the bars, and whatever the bars leave under them when it does
+        // not. The content box, not the tag: the top margin is taken off the
+        // bottom as well, and that clear strip is the point of setting one.
+        BigDecimal detailRoomH = sideBySide
+                ? contentH
+                : contentH.subtract(codeH).subtract(IDENT_TOP_MM).max(BigDecimal.ZERO);
+        BigDecimal detailFontPt =
+                fitDetailFont(settings.getDetailFontPt(), details, logoExtra, detailRoomW, detailRoomH);
+        BigDecimal detailLineH = lineHeightMm(detailFontPt);
 
         // The description gets the rest of the tag, and is made to stay on it.
         //
@@ -289,11 +299,11 @@ public record LabelLayout(
         // two cannot both be had the mark gives way - which the shop line's
         // own test below already does, once it sees how tall the name came
         // out. Counting it here instead cost a long name its last words.
-        int roomLines = contentH.divide(detailLineH, 0, RoundingMode.DOWN).intValue();
-        int otherLines = Math.max(0, details.size() - 1);
-        int maxNameLines = Math.min(MAX_NAME_LINES, Math.max(1, roomLines - otherLines));
         FittedName fittedName = fitName(
-                details.isEmpty() ? "" : details.get(0), settings.getDetailFontPt(), detailRoomW, maxNameLines);
+                details.isEmpty() ? "" : details.get(0),
+                detailFontPt,
+                detailRoomW,
+                maxNameLines(details, detailLineH, detailRoomH));
 
         List<DetailLine> detailLines = new ArrayList<>();
         if (!details.isEmpty()) {
@@ -304,7 +314,7 @@ public record LabelLayout(
                 detailLines.add(new DetailLine(line, fittedName.fontPt(), true, Role.NAME));
             }
             for (String line : details.subList(1, details.size())) {
-                detailLines.add(new DetailLine(line, settings.getDetailFontPt(), false, Role.DETAIL));
+                detailLines.add(new DetailLine(line, detailFontPt, false, Role.DETAIL));
             }
         }
 
@@ -321,7 +331,7 @@ public record LabelLayout(
         // 12 mm tag with the detail type at 7 pt, a name, a weight and a size
         // already fill the column; a fourth line pushed it to 12.9 mm and
         // stopped the shop printing at all.
-        BigDecimal shopLineH = shop.isEmpty() ? BigDecimal.ZERO : lineHeightMm(settings.getDetailFontPt());
+        BigDecimal shopLineH = shop.isEmpty() ? BigDecimal.ZERO : detailLineH;
         boolean hasShopLine = !shop.isEmpty()
                 && linesH.add(logoExtra).add(shopLineH).compareTo(contentH) <= 0;
 
@@ -371,7 +381,7 @@ public record LabelLayout(
                     : codeY.add(codeH).add(IDENT_TOP_MM);
             BigDecimal lineY = detailY;
             if (hasShopLine) {
-                elements.add(new Text(shop, detailX, lineY, settings.getDetailFontPt(), true, Role.SHOP));
+                elements.add(new Text(shop, detailX, lineY, detailFontPt, true, Role.SHOP));
                 lineY = lineY.add(shopLineH);
             }
             for (int line = 0; line < detailLines.size(); line++) {
@@ -494,6 +504,69 @@ public record LabelLayout(
     private record FittedName(List<String> lines, BigDecimal fontPt) {}
 
     /**
+     * The type the description is set in: the size the shop asked for, or the
+     * largest smaller one that keeps the block on the tag.
+     *
+     * <p>Overflowing used to be refused outright, and a refusal is per label -
+     * so one long name, or one extra line like a hallmark, stopped a whole
+     * tray of tags printing over a block a few hundredths of a millimetre too
+     * deep. A tenth of a point off the type is worth more than a tray of tags,
+     * and at these sizes a tenth is not a difference a jeweller can see.
+     *
+     * <p>Only the description's own lines are fitted. The shop's mark is not
+     * counted here because it gives way on its own further down: a mark is the
+     * least of what a tag carries, and dropping it costs less than setting the
+     * weight and the size smaller to keep it.
+     */
+    private static BigDecimal fitDetailFont(
+            BigDecimal askedPt,
+            List<String> details,
+            BigDecimal logoExtra,
+            BigDecimal roomW,
+            BigDecimal roomH) {
+        if (details.isEmpty()) {
+            return askedPt;
+        }
+        for (BigDecimal size = askedPt;
+                size.compareTo(MIN_DETAIL_FONT_PT) >= 0;
+                size = size.subtract(FONT_STEP_PT)) {
+            if (detailBlockHeight(size, details, logoExtra, roomW, roomH).compareTo(roomH) <= 0) {
+                return size;
+            }
+        }
+        // Out of sizes: the block is deeper than the tag whatever the type is
+        // set in, which means a logo too big for what is left of the column or
+        // a tag too shallow for what is on it. Neither is fixed by type, so
+        // the smallest readable size stands and the caller refuses the job.
+        return MIN_DETAIL_FONT_PT.min(askedPt);
+    }
+
+    /** How deep the description comes out when set in a given size. */
+    private static BigDecimal detailBlockHeight(
+            BigDecimal fontPt,
+            List<String> details,
+            BigDecimal logoExtra,
+            BigDecimal roomW,
+            BigDecimal roomH) {
+        BigDecimal lineH = lineHeightMm(fontPt);
+        int nameLines = fitName(details.get(0), fontPt, roomW, maxNameLines(details, lineH, roomH))
+                .lines()
+                .size();
+        return lineH.multiply(BigDecimal.valueOf(nameLines + details.size() - 1)).add(logoExtra);
+    }
+
+    /**
+     * How many lines the name may have: whatever the column has spare after
+     * the weight and the size, which are of a known length and cannot be
+     * wrapped away.
+     */
+    private static int maxNameLines(List<String> details, BigDecimal lineH, BigDecimal roomH) {
+        int roomLines = roomH.divide(lineH, 0, RoundingMode.DOWN).intValue();
+        int otherLines = Math.max(0, details.size() - 1);
+        return Math.min(MAX_NAME_LINES, Math.max(1, roomLines - otherLines));
+    }
+
+    /**
      * Fits the name to the column: a little smaller first, then wrapped.
      *
      * <p>In that order because one line reads better than two. A name only a
@@ -505,11 +578,11 @@ public record LabelLayout(
         if (name.isEmpty() || roomMm.signum() <= 0 || textWidthMm(name, fontPt).compareTo(roomMm) <= 0) {
             return new FittedName(List.of(name), fontPt);
         }
-        BigDecimal slight = fontPt.multiply(SLIGHT_SHRINK).setScale(2, RoundingMode.DOWN).max(MIN_NAME_FONT_PT);
+        BigDecimal slight = fontPt.multiply(SLIGHT_SHRINK).setScale(2, RoundingMode.DOWN).max(MIN_DETAIL_FONT_PT);
         if (textWidthMm(name, slight).compareTo(roomMm) <= 0) {
             return new FittedName(List.of(name), slight);
         }
-        for (BigDecimal size = fontPt; size.compareTo(MIN_NAME_FONT_PT) >= 0; size = size.subtract(FONT_STEP_PT)) {
+        for (BigDecimal size = fontPt; size.compareTo(MIN_DETAIL_FONT_PT) >= 0; size = size.subtract(FONT_STEP_PT)) {
             List<String> lines = wrap(name, size, roomMm);
             if (lines.size() <= maxLines) {
                 return new FittedName(lines, size);
@@ -519,8 +592,8 @@ public record LabelLayout(
         // around a hundred characters between them, so nothing the shop calls
         // a sub category reaches here; if one ever does, the tag keeps what
         // fits rather than printing the rest onto the backing.
-        List<String> lines = wrap(name, MIN_NAME_FONT_PT, roomMm);
-        return new FittedName(lines.subList(0, Math.min(lines.size(), maxLines)), MIN_NAME_FONT_PT);
+        List<String> lines = wrap(name, MIN_DETAIL_FONT_PT, roomMm);
+        return new FittedName(lines.subList(0, Math.min(lines.size(), maxLines)), MIN_DETAIL_FONT_PT);
     }
 
     /**

@@ -361,7 +361,11 @@ class LabelLayoutTest {
     void anOversizedLogoOverflows() {
         LabelSettings settings = tagSettings();
         settings.setShopMark(ShopMark.LOGO);
-        settings.setShopLogoHeightMm(new BigDecimal("6.50"));
+        // Deeper than the column has to give even with the description set at
+        // the smallest size that reads. A logo is drawn at the size it was
+        // asked for or not at all, so this is the one kind of overflow type
+        // cannot fit away - and the kind bottomMm is here to catch.
+        settings.setShopLogoHeightMm(new BigDecimal("8.00"));
         LabelDtos.Label ring = new LabelDtos.Label(4L, "998284", "22K / 916", "Womens Ring", null,
                 new BigDecimal("1.560"), "11", "Gold", "Ring", "Womens Ring", "SJ", "AVAILABLE");
 
@@ -661,6 +665,62 @@ class LabelLayoutTest {
         // the 30 mm that measuring from the origin would give.
         assertThat(text(layout, LabelLayout.Role.NAME).xMm()).isEqualByComparingTo("10.500");
         assertThat(layout.sideBySide()).isTrue();
+    }
+
+    /** The shop's own case: a hallmarked ring with a size, which is four lines. */
+    private static LabelDtos.Label fullyDescribed() {
+        return new LabelDtos.Label(1L, "7472", "22K / 916", "Gold Stud", "AZ12B4",
+                new BigDecimal("2.450"), "11", "Gold", "Stud", "Gold Stud", "SJ", "AVAILABLE");
+    }
+
+    @Test
+    @DisplayName("a description too deep for the tag is set smaller, not refused")
+    void anOverfullDescriptionIsSetSmaller() {
+        LabelSettings settings = tagSettings();
+        settings.setDetailFontPt(new BigDecimal("6.50"));
+
+        LabelLayout layout = layoutOf(fullyDescribed(), settings);
+
+        // Four lines at 6.5 pt are 11.004 mm, which from the 1 mm top margin
+        // reaches 12.004 mm on a 12 mm tag. The shop's whole tray was refused
+        // over four thousandths of a millimetre.
+        assertThat(layout.bottomMm()).isLessThanOrEqualTo(settings.getLabelHeightMm());
+        assertThat(detail(layout, "HUID:AZ12B4").fontPt()).isLessThan(settings.getDetailFontPt());
+        // Smaller, not fewer: every line the piece has is still on the tag,
+        // and each is still set in the same size as the one above it.
+        assertThat(detail(layout, "GMS.2.450").fontPt())
+                .isEqualByComparingTo(detail(layout, "Size:11").fontPt());
+        assertThat(text(layout, LabelLayout.Role.NAME).value()).isEqualTo("GOLD STUD");
+    }
+
+    @Test
+    @DisplayName("a description that fits keeps the type the shop asked for")
+    void aFittingDescriptionKeepsItsType() {
+        LabelSettings settings = tagSettings();
+
+        // The same piece without the hallmark: three lines, which the tag has
+        // always held. Nothing is shrunk that does not have to be.
+        LabelDtos.Label label = new LabelDtos.Label(1L, "7472", "22K / 916", "Gold Stud", null,
+                new BigDecimal("2.450"), "11", "Gold", "Stud", "Gold Stud", "SJ", "AVAILABLE");
+        LabelLayout layout = layoutOf(label, settings);
+
+        assertThat(detail(layout, "GMS.2.450").fontPt()).isEqualByComparingTo(settings.getDetailFontPt());
+    }
+
+    @Test
+    @DisplayName("the type stops at a size that still reads rather than shrinking away")
+    void theTypeStopsAtAReadableSize() {
+        LabelSettings settings = tagSettings();
+        settings.setDetailFontPt(new BigDecimal("6.50"));
+        settings.setShopMark(ShopMark.LOGO);
+        settings.setShopLogoHeightMm(new BigDecimal("9.00"));
+
+        LabelLayout layout = LabelLayout.of(fullyDescribed(), settings, renderer.modules("7472"), true);
+
+        // A 9 mm logo leaves nothing of a 10 mm column, so no type size fits.
+        // The lines hold at the smallest that still reads and the job is
+        // refused upstream, rather than being set to a grey smudge.
+        assertThat(detail(layout, "GMS.2.450").fontPt()).isEqualByComparingTo("3.0");
     }
 
     private static LabelLayout.Text detail(LabelLayout layout, String value) {

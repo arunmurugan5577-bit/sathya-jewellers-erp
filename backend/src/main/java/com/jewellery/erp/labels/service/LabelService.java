@@ -345,13 +345,19 @@ public class LabelService {
             // The head stops at the bottom edge of the tag, so a design that is
             // too tall does not look wrong - it just comes out with its last line
             // or its logo missing. Better to say so than to spoil a tag.
+            //
+            // What is left to refuse, now that the layout sets the description
+            // smaller rather than letting it run off: artwork drawn at the size
+            // it was asked for or not at all - a logo, or the bars themselves.
+            // Type cannot fit those away, so the job is still refused.
             BigDecimal reach = LabelLayout
                     .of(candidate, settings, barcodeRenderer.modules(serial), shopLogo.isAvailable())
                     .bottomMm();
             if (reach.compareTo(settings.getLabelHeightMm()) > 0) {
                 problems.add(new LabelDtos.Problem(id, serial,
-                        ("The label for %s is %s mm tall but the tag is only %s mm. "
-                                + "Reduce the detail type size or the logo size in label settings.")
+                        ("The label for %s is %s mm tall but the tag is only %s mm, with the detail "
+                                + "type already set as small as it reads. Reduce the logo size or the "
+                                + "barcode height in label settings, or use deeper tags.")
                                 .formatted(serial, scale(reach), scale(settings.getLabelHeightMm()))));
                 continue;
             }
